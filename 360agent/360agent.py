@@ -211,7 +211,7 @@ class Agent:
             'subprocess': 'no',
             'user': '',
             'server': '',
-            'api_host': 'api.360agent.com',
+            'api_host': 'ingest.monitoring360.io',
             'api_path': '/v2/server/poll',
             'log_file': '/var/log/360agent.log',
             'log_file_mode': 'a',
