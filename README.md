@@ -26,7 +26,7 @@ pip3 install agent360
 wget -O /etc/agent360.ini https://monitoring.platform360.io/agent360.ini
 ```
 
-You can find your USERTOKEN on the settings page (https://monitoring.platform360.io/settings/overview). You need this to generate a serverid.
+You can find your USERTOKEN on the servers page (https://monitoring.platform360.io/servers/overview) by clicking the "Add server" button. You need this to generate a serverid.
 
 ```
 agent360 hello USERTOKEN /etc/agent360-token.ini
@@ -71,6 +71,4 @@ pip3 install agent360
 
 ### Windows
 
-Download the [windows installer for agent360](https://monitoring.platform360.io/windows/agent360-setup.exe).
-When asked for the usertoken, provide the usertoken that is available on the [settings page](https://monitoring.platform360.io/settings)
-at 360 Monitoring.
+Not available yet.
