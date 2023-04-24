@@ -24,7 +24,7 @@ class Plugin(plugins.BasePlugin):
         jail = config.get('fail2ban', 'jail').split(',')
 
         for nom in jail:
-            data[nom] = {'count': os.popen('/bin/fail2ban-client status '+ nom +' | egrep -i "Currently banned:.*"  | egrep -o "[0-9.]+"').read().rstrip()}
+            data[nom] = {'count': os.popen('sudo /bin/fail2ban-client status '+ nom +' | egrep -i "Currently banned:.*"  | egrep -o "[0-9.]+"').read().rstrip()}
 
         return data
 
