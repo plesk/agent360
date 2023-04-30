@@ -24,7 +24,7 @@ class Plugin(plugins.BasePlugin):
         test the plugin by running: sudo -u agent360 agent360 test OpenVPN
 
         If you are having permission issues try to run the agent as root user:
-        https://docs.platform360.io/monitoring360/development/run-the-monitoring-agent-as-the-root-user/
+        https://docs.360monitoring.com/docs/run-the-monitoring-agent-as-the-root-user
         '''
         openvpn_clients = {}
         last_value = {}
