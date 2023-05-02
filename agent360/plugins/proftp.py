@@ -5,7 +5,7 @@ import plugins
 import json
 
 class Plugin(plugins.BasePlugin):
-    __name__ = 'ftp'
+    __name__ = 'proftp'
 
     def run(self, config):
         '''
