@@ -5,11 +5,11 @@ import plugins
 import json
 
 class Plugin(plugins.BasePlugin):
-    __name__ = 'proftp'
+    __name__ = 'proftpd'
 
     def run(self, config):
         '''
-        Current acitive FTP sessions
+        Current acitive ProFTPD sessions
         '''
         data = {}
         result = os.popen('/bin/ftpwho -o json').read()
