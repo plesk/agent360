@@ -79,7 +79,7 @@ def collect_ping(hostname):
             pass
         if response == -1:
             try:
-                rxresponse = re.findall(br"Average = (\d+)", out)
+                rxresponse = re.findall(br" + .+ = [0-9]{1,9}ms, .+ = [0-9]{1,9}ms, .+ = (\d+){1,9}ms", out)
                 response = rxresponse[0].decode()
             except Exception:
                 pass
