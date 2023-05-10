@@ -77,6 +77,12 @@ def collect_ping(hostname):
                 response = -1
         except CalledProcessError:
             pass
+        if response == -1:
+            try:
+                rxresponse = re.findall(br"Average = (\d+)", out)
+                response = rxresponse[0].decode()
+            except Exception:
+                pass
     else:
         #response = float(system_command("ping -W -c 1 " + hostname))
         response = -1
