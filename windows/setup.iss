@@ -43,6 +43,9 @@ Source: ".\build\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdi
 [Dirs]
 Name: "{userappdata}\{#MyAppName}\logs"
 
+[INI]
+Filename: "{app}\config\agent360.ini"; Section: "DEFAULT"; Key: "plugins"; String: "{app}\src\plugins"
+
 [Run]
 Filename: "{app}\bin\python\python.exe"; Parameters: """{app}\bin\python\get-pip.py"""; Flags: runhidden
 Filename: "{app}\bin\python\python.exe"; Parameters: "-m pip install psutil"; Flags: runhidden
