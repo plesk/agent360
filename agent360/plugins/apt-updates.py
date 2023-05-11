@@ -19,10 +19,21 @@ class Plugin(plugins.BasePlugin):
         [apt-updates]
         enabled = yes
         interval = 3600
+
+        Optionally check if a reboot is required:
+        checkreboot = true
         '''
         data = {}
         data['security'] = int(os.popen('sudo -n apt-get upgrade -s | grep Inst | grep security | wc -l').read())
         data['other'] = int(os.popen('sudo -n apt-get upgrade -s | grep Inst | grep -v security | wc -l').read())
+        try:
+            checkreboot = config.get('apt-updates', 'checkreboot')
+            if os.path.exists('/var/run/reboot-required') and checkreboot == "true":
+                data['Reboot Required'] = 'Yes'
+            elif checkreboot == "true":
+                data['Reboot Required'] = 'No'
+        except Exception:
+            pass
         return data
 
 if __name__ == '__main__':
