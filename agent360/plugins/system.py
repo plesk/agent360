@@ -108,7 +108,11 @@ class Plugin(plugins.BasePlugin):
             cpu['brand'] = str(systemCommand('sysctl hw.model', False)[0]).split(': ')[1]
             cpu['count'] = systemCommand('sysctl hw.ncpu')
         elif sys.platform == "win32":
-            systeminfo['os'] = "{} {}".format(platform.uname()[0], platform.uname()[2])
+            # https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information
+            if sys.getwindowsversion().build >= 22000:
+                systeminfo['os'] = "{} {}".format(platform.uname()[0], 11)
+            else:
+                systeminfo['os'] = "{} {}".format(platform.uname()[0], platform.uname()[2])
         systeminfo['cpu'] = cpu['brand']
         systeminfo['cores'] = cpu['count']
         systeminfo['memory'] = mem.total
