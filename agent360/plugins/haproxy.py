@@ -18,7 +18,12 @@ class Plugin(plugins.BasePlugin):
                 user_pass = (username, password)
             except:
                 user_pass = False
-            request = requests.get(config.get('haproxy', 'status_page_url'), auth=user_pass)
+
+            status_page_url = config.get('haproxy', 'status_page_url')
+            if not ";csv" in status_page_url:
+                status_page_url = status_page_url + ";csv"
+
+            request = requests.get(status_page_url, auth=user_pass)
             next_cache['ts'] = time.time()
             prev_cache = self.get_agent_cache()  # Get absolute values from previous check
             if request.status_code is 200:
