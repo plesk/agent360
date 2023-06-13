@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-define('PYTHON_VERSION', '3.10.4');
+define('PYTHON_VERSION', '3.11.3');
 define('PYTHON_X32_URL', 'https://www.python.org/ftp/python/' . PYTHON_VERSION . '/python-' . PYTHON_VERSION . '-embed-win32.zip');
 define('PYTHON_X64_URL', 'https://www.python.org/ftp/python/' . PYTHON_VERSION . '/python-' . PYTHON_VERSION . '-embed-amd64.zip');
 define('GET_PIP_URL', 'https://bootstrap.pypa.io/get-pip.py');

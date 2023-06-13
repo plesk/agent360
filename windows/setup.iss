@@ -49,6 +49,7 @@ Filename: "{app}\config\agent360.ini"; Section: "DEFAULT"; Key: "plugins"; Strin
 [Run]
 Filename: "{app}\bin\python\python.exe"; Parameters: """{app}\bin\python\get-pip.py"""; Flags: runhidden
 Filename: "{app}\bin\python\python.exe"; Parameters: "-m pip install psutil"; Flags: runhidden
+Filename: "{app}\bin\python\python.exe"; Parameters: "-m pip install certifi"; Flags: runhidden
 Filename: "{app}\bin\python\python.exe"; Parameters: """{app}\src\agent360.py"" hello ""{code:GetUserToken}"" ""{app}\config\agent360-token.ini"""; Flags: runhidden; Check: ShouldRunHello
 Filename: "{app}\bin\nssm.exe"; Parameters: "install {#MyAppName} ""{app}\bin\start.bat"""; Flags: runhidden
 Filename: "{app}\bin\nssm.exe"; Parameters: "set {#MyAppName} AppStdout ""{userappdata}\{#MyAppName}\logs\output.log"""; Flags: runhidden
