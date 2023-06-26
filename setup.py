@@ -12,11 +12,11 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 readme = open(os.path.join(here, 'README.md')).read()
 if sys.version.startswith('3.'):
-    install_requires = ['psutil', 'netifaces', 'configparser', 'future', 'distro']
+    install_requires = ['psutil', 'netifaces', 'configparser', 'future', 'distro', 'certifi']
 elif sys.version.startswith('2.7'):
-    install_requires = ['psutil==5.6.7', 'netifaces', 'configparser==3.5.0', 'future']
+    install_requires = ['psutil==5.6.7', 'netifaces', 'configparser==3.5.0', 'future', 'certifi']
 else:
-    install_requires = ['psutil', 'netifaces', 'configparser', 'future']
+    install_requires = ['psutil', 'netifaces', 'configparser', 'future', 'certifi']
 
 
 setuptools.setup(
