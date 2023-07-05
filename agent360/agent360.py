@@ -91,22 +91,33 @@ def info():
 def hello(proto='https'):
     parser = OptionParser()
     parser.add_option("-t", "--tags", help="Comma-separated list of tags")
+    parser.add_option("-a", "--automon", type=int, default=0, help="Enable/disable automatic monitoring of hosted websites")
+
     (options, args) = parser.parse_args()
 
     user_id = args[0]
     agent = Agent(dry_instance=True)
+
     if len(args) > 1:
         token_filename = args[1]
     else:
         token_filename = os.path.join(__FILEABSDIRNAME__, 'agent360-token.ini')
+
     if len(args) > 2:
         unique_id = args[2]
     else:
         unique_id = ''
+
     if options.tags is None:
         tags = ''
     else:
         tags = options.tags
+
+    if options.automon == 1:
+        domains = ','.join(_get_domains())
+    else:
+        domains = ''
+
     if '_' in user_id:
         server_id = user_id.split('_')[1]
         user_id = user_id.split('_')[0]
@@ -122,8 +133,10 @@ def hello(proto='https'):
                     'hostname': hostname,
                     'unique_id': unique_id,
                     'tags': tags,
+                    'domains': domains,
             }).encode("utf-8")
            ).read().decode()
+
     if len(server_id) == 24:
         print('Got server_id: %s' % server_id)
         open(token_filename, 'w').\
@@ -131,10 +144,78 @@ def hello(proto='https'):
     else:
         print('Could not retrieve server_id: %s' % server_id)
 
+def _get_apache_domains():
+    domains = []
 
-# def run_agent():
-#     Agent().run()
+    try:
+        output = subprocess.check_output(['apachectl', '-S'])
 
+        for line in output.decode().splitlines():
+            if 'namevhost' not in line:
+                continue
+
+            cols = line.strip().split(' ')
+            domains.append(cols[3])
+    except FileNotFoundError:
+        pass
+
+    return domains
+
+def _get_nginx_domains():
+    domains = []
+
+    try:
+        output = subprocess.check_output(['nginx', '-T'])
+
+        for line in output.decode().splitlines():
+            if 'server_name' not in line:
+                continue
+
+            cols = line.strip().split(' ')
+
+            if len(cols) == 2:
+                domain = cols[1].replace(';', '').replace('"', '')
+                domains.append(domain)
+    except FileNotFoundError:
+        pass
+
+    return domains
+
+def _get_domains():
+    domains = []
+
+    try:
+        json_str = subprocess.check_output(['whmapi1', '--output=jsonpretty', 'get_domain_info'])
+        response = json.loads(json_str)
+
+        for domain in response['data']['domains']:
+            domains.append(domain['domain'])
+    except FileNotFoundError:
+        try:
+            str = subprocess.check_output(['plesk', 'bin', 'domain', '--list'])
+
+            for domain in str.decode().splitlines():
+                domains.append(domain)
+        except FileNotFoundError:
+            for domain in list(set(_get_apache_domains() + _get_nginx_domains())):
+                if '.' not in domain:
+                    continue
+
+                if domain.endswith('.localdomain'):
+                    continue
+
+                if domain.endswith('.localhost'):
+                    continue
+
+                if domain.endswith('.local'):
+                    continue
+
+                domains.append(domain)
+
+    return domains
+
+def count_domains():
+    print(len(_get_domains()))
 
 def _plugin_name(plugin):
     if isinstance(plugin, basestring):
@@ -678,13 +759,15 @@ def main():
         elif sys.argv[1] == 'hello':
             del sys.argv[1]
             sys.exit(hello())
+        elif sys.argv[1] == 'count-domains':
+            del sys.argv[1]
+            sys.exit(count_domains())
         elif sys.argv[1] == 'insecure-hello':
             del sys.argv[1]
             sys.exit(hello(proto='http'))
         elif sys.argv[1] == 'test':
             sys.exit(test_plugins(sys.argv[2:]))
         else:
-
             print('Invalid option:', sys.argv[1], file=sys.stderr)
             sys.exit(1)
     else:
