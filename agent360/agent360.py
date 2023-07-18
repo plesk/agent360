@@ -21,6 +21,9 @@ else:
 
 import glob
 import imp
+import certifi
+import ssl
+
 try:
     import json
 except ImportError:
@@ -467,10 +470,12 @@ class Agent:
                     else:
 
                         try:
+                            ctx = ssl.create_default_context(cadata=certifi.contents())
+
                             if sys.version_info >= (3,):
-                                connection = http.client.HTTPSConnection(api_host, timeout=15)
+                                connection = http.client.HTTPSConnection(api_host, context=ctx, timeout=15)
                             else:
-                                connection = httplib.HTTPSConnection(api_host, timeout=15)
+                                connection = httplib.HTTPSConnection(api_host, context=ctx, timeout=15)
 
                             # Trying to send cached collections if any
                             if cached_collections:
