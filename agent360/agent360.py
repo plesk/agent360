@@ -48,7 +48,7 @@ except ImportError:
     from urllib import urlencode
     from urllib2 import urlopen, Request, HTTPError
 
-__version__ = '1.2.45'
+__version__ = '1.2.46'
 __FILEABSDIRNAME__ = os.path.dirname(os.path.abspath(__file__))
 
 ini_files = (
@@ -551,7 +551,7 @@ class Agent:
                     else:
 
                         try:
-                            ctx = ssl.create_default_context(cadata=certifi.contents())
+                            ctx = ssl.create_default_context(cafile=certifi.where())
 
                             if sys.version_info >= (3,):
                                 connection = http.client.HTTPSConnection(api_host, context=ctx, timeout=15)
