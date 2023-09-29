@@ -3,7 +3,7 @@
 360 Monitoring ([360monitoring.com](https://360monitoring.com)) is a web service that monitors and displays statistics of
 your server performance.
 
-Agent360 is OS agnostic software compatible with Python 2.7, 3.5, and 3.6.
+Agent360 is OS agnostic software compatible with Python 3.7 and 3.8.
 It's been optimized to have low CPU consumption and comes with an
 extendable set of useful plugins.
 
