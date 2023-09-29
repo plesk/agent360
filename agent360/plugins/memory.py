@@ -15,7 +15,7 @@ class Plugin(plugins.BasePlugin):
             memory[name] = getattr(mem, name)
 
         if (memory['available'] == 0 or memory['buffers'] == 0) and os.name != 'nt':
-            tot_m, used_m, free_m, sha_m, buf_m, cac_m, ava_m = map(int, os.popen('free -b -w').readlines()[1].split()[1:])
+            tot_m, used_m, free_m, sha_m, buf_m, cac_m, ava_m = map(int, os.popen('free -b -w').readlines()[1].split(':', 1)[1].split())
             memory['percent'] = 100-(((free_m+buf_m+cac_m)*100)/tot_m)
             memory['available'] = ava_m
             memory['buffers'] = buf_m
