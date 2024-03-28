@@ -40,6 +40,28 @@ def systemCommand(Command, newlines=True):
     return (Stdout, Stderr)
 
 
+def linux_hardware_memory():
+    block_size = 0
+    try:
+        with open("/sys/devices/system/memory/block_size_bytes", "r") as f:
+            block_size = int(f.readline().strip(), 16)
+
+        memory = 0
+        with os.scandir("/sys/devices/system/memory/") as it:
+            for entry in it:
+                if not entry.name.startswith("memory"):
+                    continue
+                with open(entry.path + "/state", "r") as f:
+                    if "online" != f.readline().strip():
+                        continue
+                    else:
+                        memory += block_size
+
+        return memory
+    except Exception:
+        return 0
+
+
 def ip_addresses():
     ip_list = {}
     ip_list['v4'] = {}
@@ -93,8 +115,12 @@ class Plugin(plugins.BasePlugin):
                             cpu['brand'] = line.rstrip('\n').split(':')[1].strip()
                         if "CPU(s)" == line.rstrip('\n').split(':')[0].strip():
                             cpu['count'] = line.rstrip('\n').split(':')[1].strip()
-        mem = psutil.virtual_memory()
+        mem = psutil.virtual_memory().total
         if sys.platform == "linux" or sys.platform == "linux2":
+            hw_mem = linux_hardware_memory()
+            if hw_mem != 0:
+                mem = hw_mem
+
             if distro is None:
                 systeminfo['os'] = str(' '.join(platform.linux_distribution()))
             else:
@@ -115,7 +141,7 @@ class Plugin(plugins.BasePlugin):
                 systeminfo['os'] = "{} {}".format(platform.uname()[0], platform.uname()[2])
         systeminfo['cpu'] = cpu['brand']
         systeminfo['cores'] = cpu['count']
-        systeminfo['memory'] = mem.total
+        systeminfo['memory'] = mem
         systeminfo['psutil'] = '.'.join(map(str, psutil.version_info))
         systeminfo['python_version'] = sys.version
         systeminfo['platform'] = platform.platform()
