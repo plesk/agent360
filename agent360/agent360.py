@@ -20,7 +20,7 @@ else:
     from Queue import Queue, Empty
 
 import glob
-import imp
+import importlib.util
 import certifi
 import ssl
 
@@ -246,20 +246,17 @@ def test_plugins(plugins=[]):
         print('%s:' % plugin_name)
 
         try:
-            fp, pathname, description = imp.find_module(plugin_name)
+            spec = importlib.util.find_spec(plugin_name)
         except Exception as e:
             print('Find error:', e)
             continue
 
         try:
-            module = imp.load_module(plugin_name, fp, pathname, description)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
         except Exception as e:
             print('Load error:', e)
             continue
-        finally:
-            # Since we may exit via an exception, close fp explicitly.
-            if fp:
-                fp.close()
 
         try:
             payload = module.Plugin().run(agent.config)
@@ -399,16 +396,15 @@ class Agent:
                 if self.config.getboolean(name, 'subprocess'):
                     self.schedule[filename] = 0
                 else:
-                    fp, pathname, description = imp.find_module(name)
+                    spec = importlib.util.find_spec(plugin_name)
+
                     try:
-                        module = imp.load_module(name, fp, pathname, description)
+                        module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(module)
                     except Exception:
                         module = None
                         logging.error('import_plugin_exception:%s', str(sys.exc_info()[0]))
-                    finally:
-                        # Since we may exit via an exception, close fp explicitly.
-                        if fp:
-                            fp.close()
+
                     if module:
                         self.schedule[module] = 0
                     else:
