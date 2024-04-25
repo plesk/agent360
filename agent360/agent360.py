@@ -412,16 +412,16 @@ class Agent:
                     self.schedule[filename] = 0
                 else:
                     if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
-                        spec = importlib.util.find_spec(plugin_name)
+                        spec = importlib.util.find_spec(name)
                     else:
-                        fp, pathname, description = imp.find_module(plugin_name)
+                        fp, pathname, description = imp.find_module(name)
 
                     try:
                         if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
                             module = importlib.util.module_from_spec(spec)
                             spec.loader.exec_module(module)
                         else:
-                            module = imp.load_module(plugin_name, fp, pathname, description)
+                            module = imp.load_module(name, fp, pathname, description)
                     except Exception:
                         module = None
                         logging.error('import_plugin_exception:%s', str(sys.exc_info()[0]))
