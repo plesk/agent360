@@ -426,7 +426,7 @@ class Agent:
                         module = None
                         logging.error('import_plugin_exception:%s', str(sys.exc_info()[0]))
                     finally:
-                        if sys.version_info < (3, 4):
+                        if sys.version_info < (3,4):
                             # Since we may exit via an exception, close fp explicitly.
                             if fp:
                                 fp.close()
