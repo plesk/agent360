@@ -19,8 +19,12 @@ else:
     import StringIO
     from Queue import Queue, Empty
 
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+    import importlib.util
+else:
+    import imp
+
 import glob
-import importlib.util
 import certifi
 import ssl
 
@@ -246,17 +250,28 @@ def test_plugins(plugins=[]):
         print('%s:' % plugin_name)
 
         try:
-            spec = importlib.util.find_spec(plugin_name)
+            if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+                spec = importlib.util.find_spec(plugin_name)
+            else:
+                fp, pathname, description = imp.find_module(plugin_name)
         except Exception as e:
             print('Find error:', e)
             continue
 
         try:
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+            else:
+                module = imp.load_module(plugin_name, fp, pathname, description)
         except Exception as e:
             print('Load error:', e)
             continue
+        finally:
+            if sys.version_info < (3, 4):
+                # Since we may exit via an exception, close fp explicitly.
+                if fp:
+                    fp.close()
 
         try:
             payload = module.Plugin().run(agent.config)
@@ -396,14 +411,25 @@ class Agent:
                 if self.config.getboolean(name, 'subprocess'):
                     self.schedule[filename] = 0
                 else:
-                    spec = importlib.util.find_spec(plugin_name)
+                    if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+                        spec = importlib.util.find_spec(plugin_name)
+                    else:
+                        fp, pathname, description = imp.find_module(plugin_name)
 
                     try:
-                        module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(module)
+                        if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+                            module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(module)
+                        else:
+                            module = imp.load_module(plugin_name, fp, pathname, description)
                     except Exception:
                         module = None
                         logging.error('import_plugin_exception:%s', str(sys.exc_info()[0]))
+                    finally:
+                        if sys.version_info < (3, 4):
+                            # Since we may exit via an exception, close fp explicitly.
+                            if fp:
+                                fp.close()
 
                     if module:
                         self.schedule[module] = 0
