@@ -19,7 +19,7 @@ else:
     import StringIO
     from Queue import Queue, Empty
 
-if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+if sys.version_info >= (3,4):
     import importlib.util
 else:
     import imp
@@ -250,7 +250,7 @@ def test_plugins(plugins=[]):
         print('%s:' % plugin_name)
 
         try:
-            if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+            if sys.version_info >= (3,4):
                 spec = importlib.util.find_spec(plugin_name)
             else:
                 fp, pathname, description = imp.find_module(plugin_name)
@@ -259,7 +259,7 @@ def test_plugins(plugins=[]):
             continue
 
         try:
-            if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+            if sys.version_info >= (3,4):
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
             else:
@@ -411,13 +411,13 @@ class Agent:
                 if self.config.getboolean(name, 'subprocess'):
                     self.schedule[filename] = 0
                 else:
-                    if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+                    if sys.version_info >= (3,4):
                         spec = importlib.util.find_spec(name)
                     else:
                         fp, pathname, description = imp.find_module(name)
 
                     try:
-                        if sys.version_info[0] >= 3 and sys.version_info[1] >= 4:
+                        if sys.version_info >= (3,4):
                             module = importlib.util.module_from_spec(spec)
                             spec.loader.exec_module(module)
                         else:
