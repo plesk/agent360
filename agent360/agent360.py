@@ -268,7 +268,7 @@ def test_plugins(plugins=[]):
             print('Load error:', e)
             continue
         finally:
-            if sys.version_info < (3, 4):
+            if sys.version_info < (3,4):
                 # Since we may exit via an exception, close fp explicitly.
                 if fp:
                     fp.close()
