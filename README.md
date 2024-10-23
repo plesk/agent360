@@ -43,7 +43,7 @@ To customize installation options, install Agent360 manually.
     - Debian GNU/Linux:
 
         ```sh
-        apt-get install python3-devel python3-setuptools python3-pip
+        apt-get install python3-dev python3-setuptools python3-pip
         pip3 install agent360
         wget -O /etc/agent360.ini https://monitoring.platform360.io/agent360.ini
         ```
