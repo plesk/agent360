@@ -327,8 +327,8 @@ class Agent:
             'subprocess': 'no',
             'user': '',
             'server': '',
+            'api_host': 'ingest.monitoring360.io',
             'hello_api_host': 'api.monitoring360.io',
-            'ingest_api_host': 'ingest.monitoring360.io',
             'api_path': '/v2/server/poll',
             'log_file': '/var/log/agent360.log',
             'log_file_mode': 'a',
@@ -520,7 +520,7 @@ class Agent:
         Take and collect data, send and clean if needed
         '''
         logging.info('%s', threading.currentThread())
-        api_host = self.config.get('data', 'ingest_api_host')
+        api_host = self.config.get('data', 'api_host')
         api_path = self.config.get('data', 'api_path')
         max_age = self.config.getint('agent', 'max_data_age')
         max_span = self.config.getint('agent', 'max_data_span')
