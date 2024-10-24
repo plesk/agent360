@@ -134,7 +134,7 @@ def hello(proto='https'):
         except AttributeError:
             hostname = socket.getfqdn()
         server_id = urlopen(
-            proto + '://' + agent.config.get('data', 'api_host') + '/hello.php',
+            proto + '://' + agent.config.get('data', 'hello_api_host') + '/hello',
             data=urlencode({
                     'user': user_id,
                     'hostname': hostname,
@@ -328,6 +328,7 @@ class Agent:
             'user': '',
             'server': '',
             'api_host': 'ingest.monitoring360.io',
+            'hello_api_host': 'api.monitoring360.io',
             'api_path': '/v2/server/poll',
             'log_file': '/var/log/agent360.log',
             'log_file_mode': 'a',
