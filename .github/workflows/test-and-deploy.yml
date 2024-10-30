@@ -61,7 +61,11 @@ jobs:
     - name: Build debian package
       run: dpkg-deb --build packager/debian dist/agent360.deb
     - name: Install debian package
-      run: dpkg -i dist/agent360.deb
+      run: dpkg -i agent360.deb
+    - uses: actions/upload-artifact@v4
+      with:
+        name: debian package
+        path: agent360.deb
     - name: Install pypa/build
       run: >-
         python -m
