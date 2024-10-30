@@ -1,23 +1,5 @@
 #!/bin/sh -e
 
-. /usr/share/debconf/confmodule
-
-TOKEN=/etc/agent360-token.ini
-
-db_get agent360/user
-[ -n "$RET" ] && USERID="$RET"
-
-
-if [ -n "$USERID" ]; then
-    agent360 hello $USERID /etc/agent360-token.ini
-else
-    echo 'Generic "hello" is not implemented'
-fi
-
-if which pycompile >/dev/null 2>&1; then
-    pycompile -p agent360 
-fi
-
 if [ "$(grep -c '^agent360:' /etc/passwd)" = "0" ]; then
         echo "Creating user and group agent360"
         addgroup --quiet --system agent360 && adduser --quiet --system --disabled-password --no-create-home --gecos "agent360 daemon" --group agent360
