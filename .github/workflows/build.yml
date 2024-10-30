@@ -1,0 +1,17 @@
+name: Agent360-Build-Packages
+
+on:
+  push:
+
+jobs:
+  build-debian:
+    #    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Copy source files
+        run: mkdir -p packager/debian/usr/bin; cp -r agent360 packager/debian/usr/bin/agent360
+      - name: Build debian package
+        run: dpkg-deb --build packager/debian dist/agent360.deb
+      - name: Install debian package
+        run: dpkg -i dist/agent360.deb
