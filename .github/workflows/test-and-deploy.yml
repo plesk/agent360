@@ -61,16 +61,16 @@ jobs:
       - name: Build a binary wheel and a source tarball
         run: python -m build --sdist --wheel --outdir dist/
       - name: Prepare RPM package
-        #if: github.event_name == 'release'
+        if: github.event_name == 'release'
         run: python setup.py bdist_rpm
       - name: Copy spec file
-        #if: github.event_name == 'release'
+        if: github.event_name == 'release'
         run: cp agent360.spec  build/bdist.linux-x86_64/rpm/SPECS/agent360.spec
       - name: Build RPM package
-        #if: github.event_name == 'release'
+        if: github.event_name == 'release'
         run: rpmbuild -ba --define "__python python3" --define "_topdir $PWD/build/bdist.linux-x86_64/rpm" --clean ./build/bdist.linux-x86_64/rpm/SPECS/agent360.spec
       - uses: actions/upload-artifact@v4
-        #if: github.event_name == 'release'
+        if: github.event_name == 'release'
         with:
           name: rpm package
           path: build/bdist.linux-x86_64/rpm/SRPMS/*.rpm
