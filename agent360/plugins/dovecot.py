@@ -13,7 +13,7 @@ class Plugin(plugins.BasePlugin):
         Returns active dovecot IMAP and POP3 session and the current version.
         Sudo permission to acces doveadm and dovecot commands are required.
 
-        Exampel config for /etc/agent360.ini:
+        Example config for /etc/agent360.ini:
         [dovecot]
         enabled = yes
         '''

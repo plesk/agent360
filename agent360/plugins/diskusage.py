@@ -11,13 +11,27 @@ class Plugin(plugins.BasePlugin):
 
 
     def run(self, config):
+        '''
+        Returns disk partitions usage statistics.
+
+        Example config for /etc/agent360.ini:
+        [diskusage]
+        enabled = yes
+        exclude = /dev/loop,/dev/snap,/squashfs,/cagefs-skeleton
+        '''
+
         disk = {}
         disk['df-psutil'] = []
 
+        ignored_partitions = config.get('diskusage', 'exclude', fallback='').split(',')
+        if ignored_partitions == ['']:
+            ignored_partitions = ['/loop', '/snap', 'squashfs', 'cagefs-skeleton']
+        else:
+            ignored_partitions += ['/loop', '/snap', 'squashfs', 'cagefs-skeleton']
+
         for part in psutil.disk_partitions(False):
             valid_part = True
-            ignored_partitions = ['/loop', '/snap', 'squashfs', 'cagefs-skeleton']
-            
+
             for ignore in ignored_partitions:
                 if ignore in part.device or ignore in part.mountpoint or ignore in part.fstype:
                    valid_part = False

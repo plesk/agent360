@@ -13,7 +13,7 @@ class Plugin(plugins.BasePlugin):
         Monitoring of the Postfix MTA log and optionally the Postfix version and the mailqueue
         Dependency: Pflogsumm log analyzer, sudo access
 
-        Exampel config for /etc/agent360.ini:
+        Example config for /etc/agent360.ini:
         [postfix]
         enabled = yes
         log = /var/log/mail.log
