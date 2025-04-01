@@ -14,7 +14,7 @@ class Plugin(plugins.BasePlugin):
             for row in df_output_lines:
                 if row[0] == 'tmpfs':
                     continue
-                disk[row[0]] = {'total': int(row[1]), 'used': int(row[2]), 'free': int(row[3]), 'percent': row[4][:-1]}
+                disk[row[0]] = {'total': int(row[1]), 'used': int(row[2]), 'free': int(row[3]), 'percent': int(row[4][:-1])}
         except:
             pass
 
