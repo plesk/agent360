@@ -32,8 +32,8 @@ class Plugin(plugins.BasePlugin):
 
         results = dict()
         next_cache = dict()
-        request = urllib2.Request(config.get('elasticsearch', 'status_page_url'))
-        raw_response = urllib2.urlopen(request)
+        request = Request(config.get('elasticsearch', 'status_page_url'))
+        raw_response = urlopen(request)
         next_cache['ts'] = time.time()
         prev_cache = self.get_agent_cache()  # Get absolute values from previous check
         def flatten(d, parent_key='', sep='_'):
