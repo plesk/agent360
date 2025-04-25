@@ -1,0 +1,20 @@
+Version: 1.3.1
+Source: agent360
+Section: net
+Priority: extra
+Maintainer: 360 monitoring <360support@webpros.com>
+Build-Depends: debhelper (>=9),
+        python-all
+Standards-Version: 3.9.5
+Homepage: https://github.com/plesk/agent360
+X-Python-Version: >= 2.6
+Package: agent360
+Architecture: amd64
+Multi-Arch: foreign
+Description: 360monitoring agent
+ 360monitoring.com offers a web service of monitoring and displaying
+ your server performance statistics.
+ .
+ This software is an OS-agnostic agent.
+ It’s been optimized to have a very small CPU footprint and comes with
+ an extendable set of useful plugins.
