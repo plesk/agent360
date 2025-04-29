@@ -23,7 +23,7 @@ SolidCompression=yes
 WizardStyle=modern
 OutputDir=dist
 DisableWelcomePage=no
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesInstallIn64BitMode=x64os
 UsedUserAreasWarning=no
 SetupLogging=yes
 
@@ -138,18 +138,6 @@ begin
 
     Result := False;
   end;
-end;
-
-procedure OpenBrowser(Url: string);
-var
-  ErrorCode: Integer;
-begin
-  ShellExec('open', Url, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
-end;
-
-procedure LinkClick(Sender: TObject);
-begin
-  OpenBrowser('https://www.example.com/');
 end;
 
 procedure AddCustomQueryPage();

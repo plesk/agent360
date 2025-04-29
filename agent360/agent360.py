@@ -54,6 +54,7 @@ except ImportError:
 
 __version__ = '1.3.2'
 __FILEABSDIRNAME__ = os.path.dirname(os.path.abspath(__file__))
+sslContext = ssl.create_default_context(cafile=certifi.where())
 
 ini_files = (
     os.path.join('/etc', 'agent360.ini'),
@@ -141,8 +142,9 @@ def hello(proto='https'):
                     'unique_id': unique_id,
                     'tags': tags,
                     'domains': domains,
-            }).encode("utf-8")
-           ).read().decode()
+            }).encode("utf-8"),
+            context=sslContext
+        ).read().decode()
 
     if len(server_id) == 24:
         print('Got server_id: %s' % server_id)
@@ -574,12 +576,10 @@ class Agent:
                     else:
 
                         try:
-                            ctx = ssl.create_default_context(cafile=certifi.where())
-
                             if sys.version_info >= (3,):
-                                connection = http.client.HTTPSConnection(api_host, context=ctx, timeout=15)
+                                connection = http.client.HTTPSConnection(api_host, context=sslContext, timeout=15)
                             else:
-                                connection = httplib.HTTPSConnection(api_host, context=ctx, timeout=15)
+                                connection = httplib.HTTPSConnection(api_host, context=sslContext, timeout=15)
 
                             # Trying to send cached collections if any
                             if cached_collections:
