@@ -52,7 +52,7 @@ except ImportError:
     from urllib import urlencode
     from urllib2 import urlopen, Request, HTTPError
 
-__version__ = '1.3.3'
+__version__ = '1.3.2'
 __FILEABSDIRNAME__ = os.path.dirname(os.path.abspath(__file__))
 sslContext = ssl.create_default_context(cafile=certifi.where())
 
