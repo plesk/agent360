@@ -58,12 +58,15 @@ sslContext = ssl.create_default_context(cafile=certifi.where())
 
 ini_files = (
     os.path.join('/etc', 'agent360.ini'),
+    os.path.join('/etc', 'agent360-panel.ini'),
     os.path.join('/etc', 'agent360-custom.ini'),
     os.path.join('/etc', 'agent360-token.ini'),
     os.path.join(os.path.dirname(__FILEABSDIRNAME__), 'agent360.ini'),
+    os.path.join(os.path.dirname(__FILEABSDIRNAME__), 'agent360-panel.ini'),
     os.path.join(os.path.dirname(__FILEABSDIRNAME__), 'agent360-custom.ini'),
     os.path.join(os.path.dirname(__FILEABSDIRNAME__), 'agent360-token.ini'),
     os.path.abspath('agent360.ini'),
+    os.path.abspath('agent360-panel.ini'),
     os.path.abspath('agent360-custom.ini'),
     os.path.abspath('agent360-token.ini'),
 )
@@ -71,6 +74,7 @@ ini_files = (
 if os.name == 'nt':
     ini_files = (
         os.path.join(__FILEABSDIRNAME__, '..', 'config', 'agent360.ini'),
+        os.path.join(__FILEABSDIRNAME__, '..', 'config', 'agent360-panel.ini'),
         os.path.join(__FILEABSDIRNAME__, '..', 'config', 'agent360-custom.ini'),
         os.path.join(__FILEABSDIRNAME__, '..', 'config', 'agent360-token.ini'),
     )
