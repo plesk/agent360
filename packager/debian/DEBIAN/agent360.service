@@ -1,0 +1,11 @@
+[Unit]
+Description=360monitoring agent
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/agent360/agent360.py
+Restart=always
+User=agent360
+
+[Install]
+WantedBy=multi-user.target

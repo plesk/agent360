@@ -1,0 +1,25 @@
+#!/bin/sh -e
+
+if [ "$(grep -c '^agent360:' /etc/passwd)" = "0" ]; then
+        echo "Creating user and group agent360"
+        addgroup --quiet --system agent360 && adduser --quiet --system --disabled-password --no-create-home --gecos "agent360 daemon" --group agent360
+else
+        echo "User creation skipped, user is already present"
+fi
+
+deb-systemd-helper unmask agent360.service >/dev/null || true
+
+if deb-systemd-helper --quiet was-enabled agent360.service; then
+        # Enables the unit on first installation, creates new
+        # symlinks on upgrades if the unit file has changed.
+        deb-systemd-helper enable agent360.service >/dev/null || true
+else
+        # Update the state file to add new symlinks (if any), which need to be
+        # cleaned up on purge. Also remove old symlinks.
+        deb-systemd-helper update-state agent360.service >/dev/null || true
+fi
+
+if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || true
+        deb-systemd-invoke start agent360.service >/dev/null || true
+fi

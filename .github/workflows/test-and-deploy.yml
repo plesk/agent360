@@ -56,6 +56,16 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ env.python-version }}
+    - name: Copy source files
+      run: mkdir -p packager/debian/usr/bin; cp -r agent360 packager/debian/usr/bin/agent360
+    - name: Build debian package
+      run: dpkg-deb --build packager/debian agent360-${{ GITHUB_SHA }}.deb
+    - name: Install debian package
+      run: dpkg -i agent360-${{ github.ref }}.deb
+    - uses: actions/upload-artifact@v4
+      with:
+        name: debian package
+        path: agent360.deb-${{ github.ref_name }}
     - name: Install pypa/build
       run: >-
         python -m

@@ -1,0 +1,6 @@
+#!/bin/sh -e
+
+. /usr/share/debconf/confmodule
+
+db_input high agent360/user || :
+db_go
