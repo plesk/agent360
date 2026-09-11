@@ -52,7 +52,7 @@ except ImportError:
     from urllib import urlencode
     from urllib2 import urlopen, Request, HTTPError
 
-__version__ = '1.3.4'
+__version__ = '1.3.5'
 __FILEABSDIRNAME__ = os.path.dirname(os.path.abspath(__file__))
 sslContext = ssl.create_default_context(cafile=certifi.where())
 
@@ -138,17 +138,28 @@ def hello(proto='https'):
             hostname = os.uname()[1]
         except AttributeError:
             hostname = socket.getfqdn()
-        server_id = urlopen(
-            proto + '://' + agent.config.get('data', 'hello_api_host') + '/hello',
-            data=urlencode({
-                    'user': user_id,
-                    'hostname': hostname,
-                    'unique_id': unique_id,
-                    'tags': tags,
-                    'domains': domains,
-            }).encode("utf-8"),
-            context=sslContext
-        ).read().decode()
+        # Retry up to 5 times with 5s delay between attempts
+        server_id = ''
+        url = proto + '://' + agent.config.get('data', 'hello_api_host') + '/hello'
+        payload = urlencode({
+            'user': user_id,
+            'hostname': hostname,
+            'unique_id': unique_id,
+            'tags': tags,
+            'domains': domains,
+        }).encode("utf-8")
+
+        for attempt in range(1, 6):
+            try:
+                server_id = urlopen(url, data=payload, context=sslContext).read().decode()
+                if len(server_id) == 24:
+                    break  # success
+                else:
+                    print('hello360: attempt %d returned non-id: %s' % (attempt, server_id))
+            except Exception as e:
+                print('hello360: attempt %d failed: %s' % (attempt, e))
+            if attempt < 6:
+                time.sleep(5)
 
     if len(server_id) == 24:
         print('Got server_id: %s' % server_id)

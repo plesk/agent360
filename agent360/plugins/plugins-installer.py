@@ -8,6 +8,9 @@ import ssl
 import certifi
 import logging
 import json
+import time
+import threading
+import subprocess
 from pprint import pprint
 
 if sys.version_info >= (3,):
@@ -30,13 +33,43 @@ if os.name == 'nt':
 class Plugin(plugins.BasePlugin):
     __name__ = 'plugins-installer'
 
+    # guard flags to prevent multiple updater threads
+    _updater_started = False
+    _lock = threading.Lock()
+
     def run(self, config):
         self.config = config
-        updated = self._update_plugins_from_backend()
-        if updated:
-            self._restart_agent()
-        results = self._get_plugins(config)
-        return results
+
+        # ensure only one background updater thread
+        with Plugin._lock:
+            if not Plugin._updater_started:
+                Plugin._updater_started = True
+                t = threading.Thread(
+                    target=self._periodic_updater,
+                    name="PluginUpdaterThread",
+                    daemon=True
+                )
+                t.start()
+
+        return self._get_plugins(config)
+
+    def _periodic_updater(self):
+        while True:
+            try:
+                updated = self._update_plugins_from_backend()
+                if updated:
+                    logging.info("Plugins updated, restarting agent")
+                    self._restart_agent()
+            except Exception as e:
+                logging.error("Error in periodic plugin update: %s", e)
+
+            try:
+                interval = self.config.getint(__name__, 'interval')
+                interval = max(interval, 60)
+            except Exception:
+                interval = 1800  # default 30 minutes
+            time.sleep(interval)
+
 
     def _restart_agent(self):
         pid = os.fork()
@@ -45,7 +78,7 @@ class Plugin(plugins.BasePlugin):
             try:
                 subprocess.run(['systemctl', 'restart', 'agent360'], check=True)
             except Exception as e:
-                logging.error('Failed to restart agent360: %s' % e)
+                logging.error('Failed to restart agent360: %s', e)
             os._exit(0)
 
     def _update_plugins_from_backend(self, proto='https'):
@@ -71,11 +104,12 @@ class Plugin(plugins.BasePlugin):
                     updated = True
                     self._set_plugin_configuration(plugin['id'], c, plugin['config'][c])
         except Exception as e:
-            logging.error('Failed to get plugins state: %s' % e)
+            logging.error('Failed to get plugins state: %s', e)
+            return False
         return updated
 
     def _get_connection(self, proto='https'):
-        api_host = self.config.get('data', 'api_host')
+        api_host = self.config.get('data', 'hello_api_host')
         if (proto == 'https'):
             ctx = ssl.create_default_context(cafile=certifi.where())
             if sys.version_info >= (3,):
@@ -120,8 +154,8 @@ class Plugin(plugins.BasePlugin):
     def _get_config_section_properties(self, config, section_name):
         # Exclude parent configuration
         excluded_keys = ['api_host', 'api_path', 'interval', 'log_file', 'log_file_mode',
-                        'logging_level','max_cached_collections', 'max_data_age', 'max_data_span',
-                        'plugins', 'server', 'subprocess', 'threads', 'ttl', 'user']
+                         'logging_level', 'max_cached_collections', 'max_data_age', 'max_data_span',
+                         'plugins', 'server', 'subprocess', 'threads', 'ttl', 'user']
         if section_name in config:
             properties = {
                 key: config[section_name][key]
