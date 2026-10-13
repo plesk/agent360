@@ -41,4 +41,3 @@ class Plugin(plugins.BasePlugin):
 
 if __name__ == '__main__':
     Plugin().execute()
-    
