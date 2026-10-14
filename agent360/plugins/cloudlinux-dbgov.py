@@ -26,14 +26,14 @@ class Plugin(plugins.BasePlugin):
         except Exception:
             return "Could not load lveinfo dbgov data"
 
-        if data['success'] is not 1:
+        if data.get('success') != 1:
             return "Failed to load lveinfo dbgov"
 
         results = {}
 
         for line in data['data']:
-            username = line['USER']
-            del line['USER']
+            # USER may be an int (UID without a username), keys must be uniform
+            username = str(line.pop('USER'))
             results[username] = line
 
         return results
