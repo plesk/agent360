@@ -2,18 +2,29 @@
 # -*- coding: utf-8 -*-
 """agent360 Rspamd monitor plugin.
 
-Returned metric groups:
-- Health: available, auth_ok, read_only, version, uptime_seconds
-- Volume: scanned, learned
-- Mail classification: spam_count, ham_count
-- Actions: reject_count, soft_reject_count, greylist_count,
-  add_header_count, rewrite_subject_count, no_action_count
-- Ratios: spam_ratio_pct, reject_ratio_pct, greylist_ratio_pct
-- Performance: scan_time_avg_sec, scan_time_last_sec
+Returned metrics are grouped in nested dicts:
+- meta: version
+- health: available, auth_ok, read_only, uptime_seconds, stat_ok, uptime_ok
+- messages: scanned, learned, spam_count, ham_count, spam_ratio_pct
+  (+ <name>_per_second for the counters)
+- actions: reject_count, soft_reject_count, greylist_count,
+  add_header_count, rewrite_subject_count, no_action_count,
+  reject_ratio_pct, greylist_ratio_pct (+ <name>_per_second for the counters)
+- performance: scan_time_avg_sec, scan_time_last_sec
+
+Counters are values since the start of Rspamd, *_per_second values are
+calculated from them using cached values from the previous call. Ratios are
+calculated from the counters, so they are lifetime ratios.
+
+The controller must be reachable by rspamc without a password (default
+localhost:11334 with the agent's address in secure_ip) or rspamc must be
+configured in rspamc.conf.
 
 Configuration section example:
 [rspamd]
 enabled = yes
+; optional, absolute path to rspamc, defaults to rspamc found in PATH
+; binary = /usr/bin/rspamc
 
 Notes:
 - This plugin intentionally omits low-value/raw internals to keep payloads
@@ -26,6 +37,7 @@ import json
 import os
 import re
 import subprocess
+import time
 
 import plugins
 
@@ -36,40 +48,26 @@ class Plugin(plugins.BasePlugin):
     @staticmethod
     def _which(command):
         # Compatible replacement for shutil.which for older Python versions.
-        path = os.environ.get('PATH', '')
-        if not path:
-            return None
-
-        is_windows = os.name == 'nt'
-        exts = ['']
-        if is_windows:
-            pathext = os.environ.get('PATHEXT', '.EXE;.BAT;.CMD;.COM')
-            exts = [ext.lower() for ext in pathext.split(os.pathsep) if ext]
-
-        for folder in path.split(os.pathsep):
-            folder = folder.strip('"')
-            if not folder:
+        # Only absolute PATH entries are considered.
+        for folder in os.environ.get('PATH', '').split(os.pathsep):
+            if not folder or not os.path.isabs(folder):
                 continue
-
             candidate = os.path.join(folder, command)
             if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
                 return candidate
-
-            if is_windows and not os.path.splitext(command)[1]:
-                for ext in exts:
-                    candidate_ext = candidate + ext
-                    if os.path.isfile(candidate_ext) and os.access(candidate_ext, os.X_OK):
-                        return candidate_ext
         return None
 
-    def _command(self, subcommand):
-        rspamc_path = self._which('rspamc')
-        if not rspamc_path:
+    @staticmethod
+    def _find_binary(config):
+        try:
+            configured = config.get('rspamd', 'binary')
+        except Exception:
+            configured = None
+        if configured:
+            if os.path.isabs(configured) and os.access(configured, os.X_OK):
+                return configured
             return None
-
-        cmd = [rspamc_path]
-        cmd.extend([subcommand, '-j'])
-        return cmd
+        return Plugin._which('rspamc')
 
     @staticmethod
     def _to_text(raw_value):
@@ -98,7 +96,13 @@ class Plugin(plugins.BasePlugin):
             return text
 
         # rspamc may emit non-JSON float tokens such as lowercase nan/inf.
-        return re.sub(r'(?<![A-Za-z0-9_"])(nan|inf|-inf)(?![A-Za-z0-9_"])', 'null', text, flags=re.IGNORECASE)
+        # Quoted strings are matched first and kept untouched.
+        def replace(match):
+            return match.group(0) if match.group(1) is None else 'null'
+
+        return re.sub(
+            r'"(?:[^"\\]|\\.)*"|(?<![A-Za-z0-9_])(nan|inf|-inf)(?![A-Za-z0-9_])',
+            replace, text, flags=re.IGNORECASE)
 
     def _run_json(self, cmd):
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
@@ -107,7 +111,7 @@ class Plugin(plugins.BasePlugin):
         stderr = self._to_text(stderr_raw).strip()
 
         if proc.returncode != 0:
-            return None, 'command failed (%s): %s' % (proc.returncode, stderr or stdout)
+            return None, 'command failed (%s): %s' % (proc.returncode, (stderr or stdout)[:200])
 
         json_text = self._extract_json_text(stdout)
         if not json_text:
@@ -155,18 +159,38 @@ class Plugin(plugins.BasePlugin):
             return 0.0
         return round(sum(numeric) / float(len(numeric)), 6)
 
-    def run(self, config):
-        stat_cmd = self._command('stat')
-        uptime_cmd = self._command('uptime')
+    def _rates(self, counters):
+        # Counters are values since the start of Rspamd, per second values are
+        # calculated from the values cached on the previous call.
+        now = time.time()
+        prev_cache = self.get_agent_cache()
+        next_cache = {'ts': now}
+        rates = {}
+        for key, value in counters.items():
+            next_cache[key] = value
+            try:
+                elapsed = now - prev_cache['ts']
+                if elapsed <= 0:
+                    raise ValueError
+                if value >= prev_cache[key]:
+                    rates[key] = (value - prev_cache[key]) / elapsed
+                else:  # Rspamd was restarted after previous caching
+                    rates[key] = value / elapsed
+            except (KeyError, ValueError):  # No cache yet, can't calculate
+                rates[key] = 0.0
+        self.set_agent_cache(next_cache)
+        return rates
 
-        if not stat_cmd or not uptime_cmd:
+    def run(self, config):
+        binary = self._find_binary(config)
+        if not binary:
             return {
                 'available': 0,
-                'error': 'rspamc binary not found in PATH',
+                'error': 'rspamc binary not found',
             }
 
-        stat, stat_error = self._run_json(stat_cmd)
-        uptime, uptime_error = self._run_json(uptime_cmd)
+        stat, stat_error = self._run_json([binary, 'stat', '-j'])
+        uptime, uptime_error = self._run_json([binary, 'uptime', '-j'])
 
         if not stat and not uptime:
             return {
@@ -187,13 +211,36 @@ class Plugin(plugins.BasePlugin):
         rewrite_subject_count = self._as_int(actions.get('rewrite subject', 0))
         no_action_count = self._as_int(actions.get('no action', (uptime or {}).get('clean', 0)))
 
+        rates = self._rates({
+            'scanned': scanned,
+            'learned': learned,
+            'spam_count': spam_count,
+            'ham_count': ham_count,
+            'reject_count': reject_count,
+            'soft_reject_count': soft_reject_count,
+            'greylist_count': greylist_count,
+            'add_header_count': add_header_count,
+            'rewrite_subject_count': rewrite_subject_count,
+            'no_action_count': no_action_count,
+        })
+
+        scan_times = (stat or {}).get('scan_times') or []
+        if scan_times:
+            scan_time_last = self._as_float(scan_times[-1])
+        else:
+            scan_time_last = self._as_float((stat or {}).get('scan_time', (uptime or {}).get('scan_time', 0.0)))
+
+        # A successful stat call means the controller accepted the request.
+        auth = (uptime or {}).get('auth', (stat or {}).get('auth'))
+        auth_ok = (auth == 'ok') if auth is not None else not stat_error
+
         result = {
             'meta': {
                 'version': (stat or {}).get('version', (uptime or {}).get('version', 'unknown')),
             },
             'health': {
                 'available': 1,
-                'auth_ok': 1 if (uptime or {}).get('auth') == 'ok' else 0,
+                'auth_ok': 1 if auth_ok else 0,
                 'read_only': 1 if bool((stat or {}).get('read_only', (uptime or {}).get('read_only', False))) else 0,
                 'uptime_seconds': self._as_int((stat or {}).get('uptime', (uptime or {}).get('uptime', 0))),
                 'stat_ok': 0 if stat_error else 1,
@@ -205,6 +252,10 @@ class Plugin(plugins.BasePlugin):
                 'spam_count': spam_count,
                 'ham_count': ham_count,
                 'spam_ratio_pct': self._pct(spam_count, scanned),
+                'scanned_per_second': rates['scanned'],
+                'learned_per_second': rates['learned'],
+                'spam_count_per_second': rates['spam_count'],
+                'ham_count_per_second': rates['ham_count'],
             },
             'actions': {
                 'reject_count': reject_count,
@@ -215,10 +266,16 @@ class Plugin(plugins.BasePlugin):
                 'no_action_count': no_action_count,
                 'reject_ratio_pct': self._pct(reject_count, scanned),
                 'greylist_ratio_pct': self._pct(greylist_count, scanned),
+                'reject_count_per_second': rates['reject_count'],
+                'soft_reject_count_per_second': rates['soft_reject_count'],
+                'greylist_count_per_second': rates['greylist_count'],
+                'add_header_count_per_second': rates['add_header_count'],
+                'rewrite_subject_count_per_second': rates['rewrite_subject_count'],
+                'no_action_count_per_second': rates['no_action_count'],
             },
             'performance': {
                 'scan_time_avg_sec': self._avg((stat or {}).get('scan_times', [])),
-                'scan_time_last_sec': self._as_float((stat or {}).get('scan_time', (uptime or {}).get('scan_time', 0.0)), 0.0),
+                'scan_time_last_sec': scan_time_last,
             },
         }
 
