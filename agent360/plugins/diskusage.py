@@ -14,7 +14,7 @@ class Plugin(plugins.BasePlugin):
         '''
         Returns disk partitions usage statistics.
 
-        Example config for /etc/agent360.ini:
+        Example config for /etc/agent360-custom.ini:
         [diskusage]
         enabled = yes
         exclude = /dev/loop,/dev/snap,/squashfs,/cagefs-skeleton
@@ -99,7 +99,7 @@ class Plugin(plugins.BasePlugin):
         # For LVM volume group monitoring, requires sudo access to vgs
         # add vgs to /etc/sudoers
         # agent360 ALL=(ALL) NOPASSWD: /usr/sbin/vgs
-        # set lvm = yes right under enabled = yes in /etc/agent360.ini
+        # set lvm = yes right under enabled = yes in /etc/agent360-custom.ini
         if lvm_stats == 'yes':
             try:
                 lines = [s.split(', ') for s in os.popen("sudo vgs --all --units b --noheadings --separator ', '").read().splitlines()]

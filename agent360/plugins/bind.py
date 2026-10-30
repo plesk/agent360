@@ -14,7 +14,7 @@ class Plugin(plugins.BasePlugin):
         You must have the bind statistics-channels configured
         and you must have jq installed for json processing.
         
-        Usage for /etc/agent360.ini:
+        Usage for /etc/agent360-custom.ini:
         [bind]
         enabled = yes
         port = 8053

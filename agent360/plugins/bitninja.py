@@ -26,7 +26,7 @@ class Plugin(plugins.BasePlugin):
         Then after a BitNinja restart, the plugin can be tested by running:
         sudo -u agent360 agent360 test bitninja
 
-        Add to /etc/agent360.ini:
+        Add to /etc/agent360-custom.ini:
         ```ini
         [bitninja]
         enabled = true

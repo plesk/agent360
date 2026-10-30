@@ -20,7 +20,7 @@ class Plugin(plugins.BasePlugin):
     def run(self, config):
         '''
         Plugin to collect cpanel user accounts
-        To enable add to /etc/agent360.ini:
+        To enable add to /etc/agent360-custom.ini:
         [cpanel]
         enabled = yes
         '''

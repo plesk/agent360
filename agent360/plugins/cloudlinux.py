@@ -14,7 +14,7 @@ class Plugin(plugins.BasePlugin):
         Requires sudo access to lveinfo (whereis lveinfo) add to /etc/sudoers:
         agent360 ALL=(ALL) NOPASSWD: /REPLACE/PATH/TO/lveinfo
 
-        To enable add to /etc/agent360.ini:
+        To enable add to /etc/agent360-custom.ini:
         [cloudlinux]
         enabled = yes
         '''

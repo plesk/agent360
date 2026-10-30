@@ -15,7 +15,7 @@ class Plugin(plugins.BasePlugin):
         '''
         Experimental plugin for PowerDNS authoritative server. Might also work with PowerDNS recursor,
         but it may need extra delta_keys / absolute_keys.
-        Add to /etc/agent360.ini:
+        Add to /etc/agent360-custom.ini:
         [powerdns]
         enabled=yes
         statistics_url=http://localhost:8081/api/v1/servers/localhost/statistics
