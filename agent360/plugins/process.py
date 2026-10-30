@@ -8,7 +8,53 @@ import re
 class Plugin(plugins.BasePlugin):
     __name__ = 'process'
 
-    def sanitize_command_line(self, cmdline):
+    # Optional config keys in [process]:
+    # - disable_filtering = yes to bypass all cmdline filtering/redaction.
+    # - additional_filter_patterns = comma-separated literal patterns with '*' wildcard
+    #   for extra redaction (for example: mypassword*,token=*).
+   
+
+    def _get_additional_filter_wildcards(self, config):
+        if config is None:
+            return []
+
+        try:
+            value = config.get(self.__name__, 'additional_filter_patterns')
+        except Exception:
+            value = ''
+
+        if not value:
+            return []
+
+        patterns = []
+        for pattern in str(value).split(','):
+            pattern = pattern.strip()
+            if pattern:
+                patterns.append(pattern)
+        return patterns
+
+    def _compile_wildcard_regexes(self, wildcard_patterns):
+        wildcard_regexes = []
+        for wildcard_pattern in wildcard_patterns:
+            # Treat user input as literal text; only '*' is wildcard.
+            # '*' expands to any characters, including spaces.
+            wildcard_regex = re.escape(wildcard_pattern)
+            wildcard_regex = wildcard_regex.replace(r'\*', r'.*')
+            wildcard_regexes.append(re.compile(wildcard_regex, re.IGNORECASE))
+        return wildcard_regexes
+
+    def _is_filtering_disabled(self, config):
+        if config is None:
+            return False
+
+        try:
+            value = config.get(self.__name__, 'disable_filtering')
+        except Exception:
+            value = 'no'
+
+        return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+    def sanitize_command_line(self, cmdline, additional_filter_wildcard_regexes=None):
         # Check if cmdline starts with a file path and separate it
         match = re.match(r'^(\S+)(\s+.*)?$', cmdline)
         if match:
@@ -34,6 +80,14 @@ class Plugin(plugins.BasePlugin):
         remaining_cmdline = re.sub(r'\b(?:https?|ftp):\/\/(?:\S+\:\S+@)?(?:[a-zA-Z0-9.-]+\.\S+)', '***', remaining_cmdline, flags=re.IGNORECASE)
         remaining_cmdline = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', '***', remaining_cmdline, flags=re.IGNORECASE)
 
+        if additional_filter_wildcard_regexes:
+            for wildcard_regex in additional_filter_wildcard_regexes:
+                try:
+                    # Optional user-defined wildcard rules for extra redaction.
+                    remaining_cmdline = wildcard_regex.sub('***', remaining_cmdline)
+                except Exception:
+                    pass
+
         # Combine the initial path and the sanitized command line, then limit length
         sanitized_cmdline = (initial_path + remaining_cmdline).strip()
         if len(sanitized_cmdline) > 256:
@@ -41,8 +95,11 @@ class Plugin(plugins.BasePlugin):
 
         return sanitized_cmdline
 
-    def run(self, *unused):
+    def run(self, config=None, *unused):
         process = []
+        filtering_disabled = self._is_filtering_disabled(config)
+        additional_filter_wildcards = self._get_additional_filter_wildcards(config)
+        additional_filter_wildcard_regexes = self._compile_wildcard_regexes(additional_filter_wildcards)
         for proc in psutil.process_iter():
             try:
                 pinfo = proc.as_dict(attrs=[
@@ -51,8 +108,12 @@ class Plugin(plugins.BasePlugin):
                 ])
 
                 try:
-                    # Sanitize and format the command line
-                    pinfo['cmdline'] = self.sanitize_command_line(' '.join(pinfo['cmdline']).strip())
+                    raw_cmdline = ' '.join(pinfo['cmdline']).strip()
+                    if filtering_disabled:
+                        pinfo['cmdline'] = raw_cmdline
+                    else:
+                        # Sanitize and format the command line
+                        pinfo['cmdline'] = self.sanitize_command_line(raw_cmdline, additional_filter_wildcard_regexes)
                 except:
                     pass
                 if sys.version_info < (3,):
