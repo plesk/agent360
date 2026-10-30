@@ -19,6 +19,7 @@ from __future__ import print_function, unicode_literals
 
 import base64
 import json
+import logging
 
 try:
     from urllib.request import Request, urlopen
@@ -26,10 +27,16 @@ try:
 except Exception:
     from urllib2 import Request, urlopen, HTTPError, URLError
 
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+
 import plugins
 
 
 DEFAULT_TIMEOUT = 10
+MAX_RESPONSE_BYTES = 1024 * 1024  # 1 MiB
 DISABLED_VALUES = ('no', 'false', '0', 'off')
 REQUEST_HEADERS = {
     'Accept': 'application/json',
@@ -100,9 +107,15 @@ class Plugin(plugins.BasePlugin):
             if not endpoint_name or not self._is_enabled(config, section, endpoint_name):
                 continue
 
+            url = config.get(section, option_name)
+            if urlparse(url).scheme not in ('http', 'https'):
+                logging.warning('json_fetch: endpoint %s: unsupported URL scheme (only http/https allowed)',
+                                endpoint_name)
+                continue
+
             endpoint = {
                 'name': endpoint_name,
-                'url': config.get(section, option_name),
+                'url': url,
                 'method': 'GET',
                 'headers': {},
                 'timeout': DEFAULT_TIMEOUT,
@@ -179,38 +192,38 @@ class Plugin(plugins.BasePlugin):
     def _fetch_json(self, endpoint):
         try:
             response = urlopen(self._build_request(endpoint), timeout=endpoint['timeout'])
-            payload = self._decode_payload(response.read())
+            raw = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw) > MAX_RESPONSE_BYTES:
+                logging.warning('json_fetch: endpoint %s: response larger than %d bytes',
+                                endpoint['name'], MAX_RESPONSE_BYTES)
+                return None
+            payload = self._decode_payload(raw)
             return json.loads(payload)
         except HTTPError as error:
-            return {
-                'error': 'HTTPError: %s %s' % (
-                    getattr(error, 'code', ''),
-                    getattr(error, 'reason', str(error)),
-                )
-            }
+            message = 'HTTPError: %s %s' % (
+                getattr(error, 'code', ''),
+                getattr(error, 'reason', str(error)),
+            )
         except URLError as error:
-            message = error.reason if hasattr(error, 'reason') else str(error)
-            return {'error': 'URLError: %s' % message}
+            message = 'URLError: %s' % (error.reason if hasattr(error, 'reason') else str(error))
         except ValueError as error:
-            return {'error': 'JSON parse error: %s' % str(error)}
+            message = 'JSON parse error: %s' % str(error)
         except Exception as error:
-            return {'error': 'Fetch error: %s' % str(error)}
+            message = 'Fetch error: %s' % str(error)
+        logging.warning('json_fetch: endpoint %s: %s', endpoint['name'], message)
+        return None
 
-    def _flatten_payload(self, endpoint_name, payload):
-        if isinstance(payload, dict):
-            if len(payload) == 1:
-                only_key = next(iter(payload))
-                nested_value = payload[only_key]
-                if isinstance(nested_value, dict):
-                    return {
-                        '{}_{}'.format(endpoint_name, child_key): child_value
-                        for child_key, child_value in nested_value.items()
-                    }
-            return {
-                '{}_{}'.format(endpoint_name, child_key): child_value
-                for child_key, child_value in payload.items()
-            }
-        return {endpoint_name: payload}
+    def _flatten_payload(self, prefix, value, depth=3):
+        if isinstance(value, bool):
+            return {prefix: int(value)}
+        if isinstance(value, (int, float)):
+            return {prefix: value}
+        if isinstance(value, dict) and depth > 0:
+            out = {}
+            for key, child in value.items():
+                out.update(self._flatten_payload('%s_%s' % (prefix, key), child, depth - 1))
+            return out
+        return {}  # strings, null, lists, too-deep values are skipped
 
     def run(self, config):
         try:
@@ -223,14 +236,12 @@ class Plugin(plugins.BasePlugin):
 
         results = {}
         for endpoint in endpoints:
-            url = endpoint.get('url')
-            if not url:
-                results[endpoint['name']] = {'error': 'missing url'}
-                continue
-
             payload = self._fetch_json(endpoint)
-            flattened = self._flatten_payload(endpoint['name'], payload)
-            results.update(flattened)
+            if payload is None:
+                results['%s_up' % endpoint['name']] = 0
+                continue
+            results['%s_up' % endpoint['name']] = 1
+            results.update(self._flatten_payload(endpoint['name'], payload))
 
         return results
 
