@@ -10,7 +10,7 @@ class Plugin(plugins.BasePlugin):
 
     def run(self, config):
         '''
-        Monitor currently banned IP's, specify the fail2ban jail you want to monitor in /etc/agent360.ini
+        Monitor currently banned IP's, specify the fail2ban jail you want to monitor in /etc/agent360-custom.ini
         
         Example:
         [fail2ban]

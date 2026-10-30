@@ -22,7 +22,7 @@ class Plugin(plugins.BasePlugin):
 
         test by running:
         sudo -u agent360 agent360 test wp-toolkit
-        Add to /etc/agent360.ini:
+        Add to /etc/agent360-custom.ini:
         [wp-toolkit]
         enabled = yes
         interval = 3600
