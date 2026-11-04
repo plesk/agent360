@@ -14,16 +14,17 @@ on:
 jobs:
   tests:
 
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest (24.04) has no Python 3.8 build for setup-python
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         python-version: [3.8, 3.11]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
@@ -49,11 +50,11 @@ jobs:
     env:
       python-version: 3.8
     needs: tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.python-version }}
     - name: Install pypa/build
@@ -71,13 +72,13 @@ jobs:
         --outdir dist/
     - name: Publish distribution 📦 to Test PyPI
       if: github.ref == 'refs/heads/master'
-      uses: pypa/gh-action-pypi-publish@master
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        repository_url: https://test.pypi.org/legacy/
-        skip_existing: true
+        repository-url: https://test.pypi.org/legacy/
+        skip-existing: true
     - name: Publish distribution 📦 to PyPI
       if: github.event_name == 'release'
-      uses: pypa/gh-action-pypi-publish@master
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
