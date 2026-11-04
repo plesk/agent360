@@ -12,9 +12,12 @@ class Plugin(plugins.BasePlugin):
         Mongodb monitoring
         """
 
-        client = MongoClient(config.get('mongodb', 'connection_string'))
-        db = client.admin
-        statistics = db.command("serverStatus")
+        try:
+            client = MongoClient(config.get('mongodb', 'connection_string'))
+            db = client.admin
+            statistics = db.command("serverStatus")
+        except Exception:
+            return self.service_down()
         prev_cache = self.get_agent_cache()  # Get absolute values from previous check
         data = {}
         results = {}
@@ -107,7 +110,7 @@ class Plugin(plugins.BasePlugin):
         results['mem.virtual'] = statistics['mem']['virtual']
         results['mem.supported'] = 0 if statistics['mem']['supported'] is False else 1
 
-        return results
+        return self.service_up(results)
 
 
 if __name__ == '__main__':

@@ -33,7 +33,10 @@ class Plugin(plugins.BasePlugin):
         results = dict()
         next_cache = dict()
         request = Request(config.get('elasticsearch', 'status_page_url'))
-        raw_response = urlopen(request)
+        try:
+            raw_response = urlopen(request)
+        except Exception:
+            return self.service_down()
         next_cache['ts'] = time.time()
         prev_cache = self.get_agent_cache()  # Get absolute values from previous check
         def flatten(d, parent_key='', sep='_'):
@@ -48,7 +51,7 @@ class Plugin(plugins.BasePlugin):
         try:
             j = flatten(json.loads(raw_response.read(), object_hook=ascii_encode_dict)['_all']['total'])
         except Exception:
-            return False
+            return self.service_down()
 
 
         delta_keys = (
@@ -120,7 +123,7 @@ class Plugin(plugins.BasePlugin):
         # Cache absolute values for next check calculations
         self.set_agent_cache(data)
 
-        return j
+        return self.service_up(j)
 
 
 if __name__ == '__main__':

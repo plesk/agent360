@@ -28,7 +28,11 @@ class Plugin(plugins.BasePlugin):
             "requests": 9637106,
             "requests_per_second": 0.0,
             "waiting": 189,
-            "writing": 3
+            "writing": 3,
+            "up": 1
+
+        "up" is 1 when the status page was fetched and parsed, 0 otherwise
+        (in which case it is the only metric returned).
 
         requests, accepts, handled are values since the start of nginx.
         *_per_second values calculated from them using cached values from previous call.
@@ -77,9 +81,9 @@ class Plugin(plugins.BasePlugin):
             # Cache absolute values for next check calculations
             self.set_agent_cache(next_cache)
 
-            return results
+            return self.service_up(results)
         except Exception:
-            return False
+            return self.service_down()
 
 
 if __name__ == '__main__':

@@ -37,18 +37,15 @@ class Plugin(plugins.BasePlugin):
         except:
             user_pass = False
 
-        request = requests.get(config.get('rabbitmq', 'status_page_url'), auth=user_pass)
-
-        if request.status_code == 401:
-            request = requests.get(config.get('rabbitmq', 'status_page_url'), auth=HTTPBasicAuth(username, password))
-
-        if request.status_code is 200:
-            try:
-                j = request.json()
-            except Exception as e:
-                return e
-        else:
-            return "Could not load status page: {}".format(request.text)
+        try:
+            request = requests.get(config.get('rabbitmq', 'status_page_url'), auth=user_pass)
+            if request.status_code == 401:
+                request = requests.get(config.get('rabbitmq', 'status_page_url'), auth=HTTPBasicAuth(username, password))
+            if request.status_code != 200:
+                return self.service_down()
+            j = request.json()
+        except Exception:
+            return self.service_down()
 
         next_cache['ts'] = time.time()
         prev_cache = self.get_agent_cache()  # Get absolute values from previous check
@@ -83,7 +80,7 @@ class Plugin(plugins.BasePlugin):
 
         self.set_agent_cache(next_cache)
 
-        return results
+        return self.service_up(results)
 
 
 if __name__ == '__main__':

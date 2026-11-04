@@ -35,10 +35,13 @@ class Plugin(plugins.BasePlugin):
         except:
             auth['db'] = 'mysql'
 
-        db = MySQLdb.connect(**auth)
-        cursor = db.cursor()
-        cursor.execute("SHOW GLOBAL STATUS;")
-        query_result = cursor.fetchall()
+        try:
+            db = MySQLdb.connect(**auth)
+            cursor = db.cursor()
+            cursor.execute("SHOW GLOBAL STATUS;")
+            query_result = cursor.fetchall()
+        except Exception:
+            return self.service_down()
         non_delta = (
             'max_used_connections',
             'open_files',
@@ -187,7 +190,7 @@ class Plugin(plugins.BasePlugin):
         db.close()
         data['ts'] = time.time()
         self.set_agent_cache(data)
-        return results
+        return self.service_up(results)
 
 
 if __name__ == '__main__':

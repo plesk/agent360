@@ -138,6 +138,7 @@ class Plugin(plugins.BasePlugin):
             redis_connection = redis.StrictRedis(host=redis_host,port=redis_port,db=redis_db,password=redis_password)
             stats = redis_connection.info()
         except Exception as e:
+            data['up']=0
             data['status']=0
             data['msg']='Connection Error'
             if not stats:
@@ -146,7 +147,7 @@ class Plugin(plugins.BasePlugin):
         for name, value in stats.items():
             if name in METRICS.keys() :
                 data[METRICS[name]] = value
-        return data
+        return self.service_up(data)
 
 if __name__ == '__main__':
     Plugin().execute()

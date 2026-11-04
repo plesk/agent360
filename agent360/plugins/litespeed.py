@@ -78,9 +78,14 @@ class Plugin(plugins.BasePlugin):
                     if key in metrics:
                         results[vhost][key] = value
 
+        if data is not True:
+            # No statistics could be fetched: report the service as down
+            # and keep the previously cached values for the next check.
+            return self.service_down()
+
         result['ts'] = time.time()
         self.set_agent_cache(result)
-        return results
+        return self.service_up(results)
 
 if __name__ == '__main__':
     Plugin().execute()

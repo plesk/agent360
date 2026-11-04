@@ -46,8 +46,8 @@ class Plugin(plugins.BasePlugin):
 
             data = urlopen(request).read().decode('utf-8')
 
-        except Exception as e:
-            return False
+        except Exception:
+            return self.service_down()
 
         exp = re.compile(r'^([A-Za-z ]+):\s+(.+)$')
         results = {}
@@ -91,7 +91,7 @@ class Plugin(plugins.BasePlugin):
                         results[k] = v
 
         self.set_agent_cache(next_cache)
-        return results
+        return self.service_up(results)
 
 
 if __name__ == '__main__':

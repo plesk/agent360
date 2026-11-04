@@ -30,11 +30,11 @@ class Plugin(plugins.BasePlugin):
         next_cache = dict()
         my_pools = config.get(__name__, 'status_page_url').split(',')
         prev_cache = self.get_agent_cache()  # Get absolute values from previous check
+        all_pools_up = True
         for pool in my_pools:
-            request = Request(pool)
-            raw_response = urlopen(request)
-
             try:
+                request = Request(pool)
+                raw_response = urlopen(request)
                 data = raw_response.read().decode('utf-8')
 #                pprint.pprint(data)
                 if sys.version_info >= (3,):
@@ -47,8 +47,9 @@ class Plugin(plugins.BasePlugin):
                     results[j['pool']][k.replace(" ", "_")] = v
 
                 next_cache['%s_accepted_conn' % j['pool']] = int(results[j['pool']]['accepted_conn'])
-            except Exception as e:
-                return e
+            except Exception:
+                all_pools_up = False
+                continue
 
             try:
                 if next_cache['%s_accepted_conn' % j['pool']] >= prev_cache['%s_accepted_conn' % j['pool']]:
@@ -65,6 +66,7 @@ class Plugin(plugins.BasePlugin):
         # Cache absolute values for next check calculations
         self.set_agent_cache(next_cache)
 
+        results['up'] = 1 if all_pools_up else 0
         return results
 
 
