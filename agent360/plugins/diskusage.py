@@ -17,15 +17,17 @@ class Plugin(plugins.BasePlugin):
         Example config for /etc/agent360-custom.ini:
         [diskusage]
         enabled = yes
-        exclude = /dev/loop,/dev/snap,/squashfs,/cagefs-skeleton,/virtfs
+        exclude = /dev/loop,/dev/snap,/squashfs,/cagefs-skeleton,/virtfs,/var/lsns
         '''
 
         disk = {}
         disk['df-psutil'] = []
 
         # /virtfs: cPanel VirtFS Jailed Shell bind-mounts system directories
-        # into /home/virtfs/<user>/, which would count the same disk many times.
-        default_ignored = ['/loop', '/snap', 'squashfs', 'cagefs-skeleton', '/virtfs']
+        # into /home/virtfs/<user>/, and LiteSpeed Namespace Containers mount
+        # per-user environments under /var/lsns/<uid>/. Both are bind mounts of
+        # filesystems already reported, so they would count the same disk many times.
+        default_ignored = ['/loop', '/snap', 'squashfs', 'cagefs-skeleton', '/virtfs', '/var/lsns']
         ignored_partitions = [i for i in config.get('diskusage', 'exclude', fallback='').split(',') if i]
         ignored_partitions += default_ignored
 
