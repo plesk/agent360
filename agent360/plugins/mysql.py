@@ -42,6 +42,7 @@ class Plugin(plugins.BasePlugin):
         non_delta = (
             'max_used_connections',
             'open_files',
+            'open_table_definitions',
             'open_tables',
             'qcache_free_blocks',
             'qcache_free_memory',
@@ -80,6 +81,8 @@ class Plugin(plugins.BasePlugin):
             'max_used_connections',
             'open_files',
             'open_tables',
+            'opened_files',
+            'opened_table_definitions',
             'opened_tables',
             'qcache_free_blocks',
             'qcache_free_memory',
