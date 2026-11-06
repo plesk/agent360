@@ -23,13 +23,16 @@ class Plugin(plugins.BasePlugin):
             if not ";csv" in status_page_url:
                 status_page_url = status_page_url + ";csv"
 
-            request = requests.get(status_page_url, auth=user_pass)
+            try:
+                request = requests.get(status_page_url, auth=user_pass)
+            except Exception:
+                return self.service_down()
             next_cache['ts'] = time.time()
             prev_cache = self.get_agent_cache()  # Get absolute values from previous check
-            if request.status_code is 200:
+            if request.status_code == 200:
                 response = request.text.split("\n")
             else:
-                return "Could not load haproxy status page: {}".format(request.text)
+                return self.service_down()
 
             non_delta = (
             'qcur',
@@ -139,7 +142,7 @@ class Plugin(plugins.BasePlugin):
             data['ts'] = time.time()
             self.set_agent_cache(data)
 
-            return results
+            return self.service_up(results)
 
 
 if __name__ == '__main__':

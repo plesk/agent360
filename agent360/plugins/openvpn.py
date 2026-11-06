@@ -16,7 +16,7 @@ class Plugin(plugins.BasePlugin):
         or
         pip3 install openvpn-status
 
-        In /etc/agent360.ini to enable put:
+        In /etc/agent360-custom.ini to enable put:
         [openvpn]
         enabled = yes
         status_path = /etc/openvpn/openvpn-status.log

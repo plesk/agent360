@@ -27,28 +27,33 @@ class Plugin(plugins.BasePlugin):
             return dict(map(ascii_encode, pair) for pair in data.items())
 
         results = dict()
-        next_cache = dict()
         my_pools = config.get(__name__, 'status_page_url').split(',')
         prev_cache = self.get_agent_cache()  # Get absolute values from previous check
+        next_cache = prev_cache.copy()
+        all_pools_up = True
         for pool in my_pools:
-            request = Request(pool)
-            raw_response = urlopen(request)
-
             try:
+                request = Request(pool)
+                raw_response = urlopen(request)
                 data = raw_response.read().decode('utf-8')
 #                pprint.pprint(data)
                 if sys.version_info >= (3,):
                     j = json.loads(data)
                 else:
                     j = json.loads(data, object_hook=ascii_encode_dict)
-                results[j['pool']] = {}
-                next_cache['%s_ts' % j['pool']] = time.time()
+                pool_results = {}
                 for k, v in j.items():
-                    results[j['pool']][k.replace(" ", "_")] = v
+                    pool_results[k.replace(" ", "_")] = v
+                accepted_conn = int(pool_results['accepted_conn'])
+                sample_time = time.time()
 
-                next_cache['%s_accepted_conn' % j['pool']] = int(results[j['pool']]['accepted_conn'])
-            except Exception as e:
-                return e
+                # Publish only validated samples; failed pools keep their cache.
+                results[j['pool']] = pool_results
+                next_cache['%s_ts' % j['pool']] = sample_time
+                next_cache['%s_accepted_conn' % j['pool']] = accepted_conn
+            except Exception:
+                all_pools_up = False
+                continue
 
             try:
                 if next_cache['%s_accepted_conn' % j['pool']] >= prev_cache['%s_accepted_conn' % j['pool']]:
@@ -65,6 +70,7 @@ class Plugin(plugins.BasePlugin):
         # Cache absolute values for next check calculations
         self.set_agent_cache(next_cache)
 
+        results['up'] = 1 if all_pools_up else 0
         return results
 
 

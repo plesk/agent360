@@ -14,7 +14,7 @@ class Plugin(plugins.BasePlugin):
         Requires sudo access to lveinfo (whereis lveinfo) add to /etc/sudoers:
         agent360 ALL=(ALL) NOPASSWD: /REPLACE/PATH/TO/lveinfo
 
-        To enable add to /etc/agent360.ini:
+        To enable add to /etc/agent360-custom.ini:
         [cloudlinux-dbgov]
         enabled = yes
         '''
@@ -26,14 +26,14 @@ class Plugin(plugins.BasePlugin):
         except Exception:
             return "Could not load lveinfo dbgov data"
 
-        if data['success'] is not 1:
+        if data.get('success') != 1:
             return "Failed to load lveinfo dbgov"
 
         results = {}
 
         for line in data['data']:
-            username = line['USER']
-            del line['USER']
+            # USER may be an int (UID without a username), keys must be uniform
+            username = str(line.pop('USER'))
             results[username] = line
 
         return results

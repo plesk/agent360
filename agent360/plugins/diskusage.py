@@ -14,30 +14,30 @@ class Plugin(plugins.BasePlugin):
         '''
         Returns disk partitions usage statistics.
 
-        Example config for /etc/agent360.ini:
+        Example config for /etc/agent360-custom.ini:
         [diskusage]
         enabled = yes
-        exclude = /dev/loop,/dev/snap,/squashfs,/cagefs-skeleton
+        exclude = /dev/loop,/dev/snap,/squashfs,/cagefs-skeleton,/virtfs,/var/lsns
         '''
 
         disk = {}
         disk['df-psutil'] = []
 
-        ignored_partitions = config.get('diskusage', 'exclude', fallback='').split(',')
-        if ignored_partitions == ['']:
-            ignored_partitions = ['/loop', '/snap', 'squashfs', 'cagefs-skeleton']
-        else:
-            ignored_partitions += ['/loop', '/snap', 'squashfs', 'cagefs-skeleton']
+        # /virtfs: cPanel VirtFS Jailed Shell bind-mounts system directories
+        # into /home/virtfs/<user>/, and LiteSpeed Namespace Containers mount
+        # per-user environments under /var/lsns/<uid>/. Both are bind mounts of
+        # filesystems already reported, so they would count the same disk many times.
+        default_ignored = ['/loop', '/snap', 'squashfs', 'cagefs-skeleton', '/virtfs', '/var/lsns']
+        ignored_partitions = [i for i in config.get('diskusage', 'exclude', fallback='').split(',') if i]
+        ignored_partitions += default_ignored
+
+        def is_ignored(*values):
+            return any(ignore in value for ignore in ignored_partitions for value in values)
 
         for part in psutil.disk_partitions(False):
-            valid_part = True
-
-            for ignore in ignored_partitions:
-                if ignore in part.device or ignore in part.mountpoint or ignore in part.fstype:
-                   valid_part = False
-            if valid_part == False:
+            if is_ignored(part.device, part.mountpoint, part.fstype):
                 continue
-            
+
             if os.name == 'nt':
                 if 'cdrom' in part.opts or part.fstype == '':
                     # skip cd-rom drives with no disk in it; they may raise
@@ -65,7 +65,7 @@ class Plugin(plugins.BasePlugin):
                 df_output_lines = [s.split() for s in os.popen("df -Pl").read().splitlines()]
                 del df_output_lines[0]
                 for row in df_output_lines:
-                    if row[0] == 'tmpfs':
+                    if row[0] == 'tmpfs' or is_ignored(row[0], row[5]):
                         continue
                     disk['df-psutil'].append({'info': [row[0], row[5],'',''], 'total': int(row[1])*1024, 'used': int(row[2])*1024, 'free': int(row[3])*1024, 'percent': row[4][:-1]})
             except:
@@ -99,7 +99,7 @@ class Plugin(plugins.BasePlugin):
         # For LVM volume group monitoring, requires sudo access to vgs
         # add vgs to /etc/sudoers
         # agent360 ALL=(ALL) NOPASSWD: /usr/sbin/vgs
-        # set lvm = yes right under enabled = yes in /etc/agent360.ini
+        # set lvm = yes right under enabled = yes in /etc/agent360-custom.ini
         if lvm_stats == 'yes':
             try:
                 lines = [s.split(', ') for s in os.popen("sudo vgs --all --units b --noheadings --separator ', '").read().splitlines()]

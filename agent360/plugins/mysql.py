@@ -35,13 +35,17 @@ class Plugin(plugins.BasePlugin):
         except:
             auth['db'] = 'mysql'
 
-        db = MySQLdb.connect(**auth)
-        cursor = db.cursor()
-        cursor.execute("SHOW GLOBAL STATUS;")
-        query_result = cursor.fetchall()
+        try:
+            db = MySQLdb.connect(**auth)
+            cursor = db.cursor()
+            cursor.execute("SHOW GLOBAL STATUS;")
+            query_result = cursor.fetchall()
+        except Exception:
+            return self.service_down()
         non_delta = (
             'max_used_connections',
             'open_files',
+            'open_table_definitions',
             'open_tables',
             'qcache_free_blocks',
             'qcache_free_memory',
@@ -80,6 +84,8 @@ class Plugin(plugins.BasePlugin):
             'max_used_connections',
             'open_files',
             'open_tables',
+            'opened_files',
+            'opened_table_definitions',
             'opened_tables',
             'qcache_free_blocks',
             'qcache_free_memory',
@@ -129,8 +135,27 @@ class Plugin(plugins.BasePlugin):
                 pass
 
         cursor = db.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SHOW SLAVE STATUS')
+        # SHOW REPLICA STATUS: MySQL 8.0.22+ / MariaDB 10.5.1+. Older servers
+        # reject it with a syntax error (ProgrammingError), so fall back.
+        try:
+            cursor.execute('SHOW REPLICA STATUS')
+        except MySQLdb.Error:
+            cursor.execute('SHOW SLAVE STATUS')
         query_result_slave = cursor.fetchone()
+
+        # Newer servers renamed columns; map them back to the legacy names
+        # so metric keys stay the same across server versions.
+        replica_key_map = {
+            'replica_io_state': 'slave_io_state',
+            'source_host': 'master_host',
+            'seconds_behind_source': 'seconds_behind_master',
+            'read_source_log_pos': 'read_master_log_pos',
+            'replica_io_running': 'slave_io_running',
+            'replica_sql_running': 'slave_sql_running',
+            'exec_source_log_pos': 'exec_master_log_pos',
+            'replica_sql_running_state': 'slave_sql_running_state',
+            'source_retry_count': 'master_retry_count',
+        }
         non_delta_slave = (
             'slave_io_state',
             'master_host',
@@ -149,6 +174,7 @@ class Plugin(plugins.BasePlugin):
             query_result_slave = dict()
         for key, value in query_result_slave.items():
             key = key.lower().strip()
+            key = replica_key_map.get(key, key)
             if key == 'slave_sql_running':
                 value = 1 if value == 'Yes' else 0
             if key == 'slave_io_running':
@@ -167,7 +193,7 @@ class Plugin(plugins.BasePlugin):
         db.close()
         data['ts'] = time.time()
         self.set_agent_cache(data)
-        return results
+        return self.service_up(results)
 
 
 if __name__ == '__main__':

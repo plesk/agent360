@@ -14,15 +14,18 @@ class Plugin(plugins.BasePlugin):
         You must have the bind statistics-channels configured
         and you must have jq installed for json processing.
         
-        Usage for /etc/agent360.ini:
+        Usage for /etc/agent360-custom.ini:
         [bind]
         enabled = yes
         port = 8053
         '''
         bport = config.get('bind', 'port')
         result = os.popen('curl -j http://localhost:' + str(bport) + '/json 2>/dev/null | jq ".qtypes * .rcodes * .nsstats"').read()
-        data=json.loads(result)
-        return data
+        try:
+            data = json.loads(result)
+        except ValueError:
+            return self.service_down()
+        return self.service_up(data)
 
 if __name__ == '__main__':
     Plugin().execute()

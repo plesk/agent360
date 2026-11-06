@@ -15,7 +15,7 @@ class Plugin(plugins.BasePlugin):
         test by running:
         sudo -u agent360 agent360 test yum-updates
 
-        Add to /etc/agent360.ini:
+        Add to /etc/agent360-custom.ini:
         [yum-updates]
         enabled = yes
         interval = 3600

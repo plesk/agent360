@@ -69,6 +69,27 @@ class BasePlugin:
         except IndexError:
             self.agent_cache.append(cache)
 
+    @staticmethod
+    def service_up(results=None):
+        '''
+        Mark the monitored service as available ("up": 1).
+        Pass the metrics collected so far (or nothing) and return the payload
+        for the plugin to return.
+        '''
+        if results is None:
+            results = {}
+        results['up'] = 1
+        return results
+
+    @staticmethod
+    def service_down():
+        '''
+        Payload for a plugin whose monitored service could not be reached or
+        queried. Returned instead of False/None/an exception so the 360
+        Monitoring ingest still indexes the plugin and an alert on "up" works.
+        '''
+        return {'up': 0}
+
     def absolute_to_per_second(self, key, val, prev_cache):
         try:
             if val >= prev_cache[key]:

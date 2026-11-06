@@ -114,11 +114,11 @@ class Plugin(plugins.BasePlugin):
         final = {}
 
         if resdata is None:
-            return False
+            return self.service_down()
         else:
             final = self.parse_stat(resdata)
 
-        return final
+        return self.service_up(final)
 
 if __name__ == '__main__':
 
