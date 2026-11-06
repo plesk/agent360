@@ -21,8 +21,11 @@ class Plugin(plugins.BasePlugin):
         '''
         bport = config.get('bind', 'port')
         result = os.popen('curl -j http://localhost:' + str(bport) + '/json 2>/dev/null | jq ".qtypes * .rcodes * .nsstats"').read()
-        data=json.loads(result)
-        return data
+        try:
+            data = json.loads(result)
+        except ValueError:
+            return self.service_down()
+        return self.service_up(data)
 
 if __name__ == '__main__':
     Plugin().execute()

@@ -27,7 +27,7 @@ class Plugin(plugins.BasePlugin):
             else:
                 mc = memcache.Client(['unix:/%s' % socket], debug=0)
         except:
-            return "Could not connect to memcached"
+            return self.service_down()
 
         non_delta = (
             'accepting_conns',
@@ -101,11 +101,11 @@ class Plugin(plugins.BasePlugin):
                 else:
                     pass
         except:
-            return 'Could not fetch memcached stats'
+            return self.service_down()
 
         data['ts'] = time.time()
         self.set_agent_cache(data)
-        return results
+        return self.service_up(results)
 
 
 if __name__ == '__main__':

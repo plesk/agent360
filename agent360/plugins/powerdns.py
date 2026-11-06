@@ -37,19 +37,22 @@ class Plugin(plugins.BasePlugin):
         if config.has_option(__name__, 'timeout'):
             timeout = int(config.get(__name__, 'timeout'))
         # create response based on configuration
-        if config.has_option(__name__, 'ca_file'):
-            raw_response = urlopen(request, timeout=timeout, cafile=config.get(__name__, 'ca_file'))
-        elif config.has_option(__name__, 'ca_path'):
-            raw_response = urlopen(request, timeout=timeout, capath=config.get(__name__, 'ca_path'))
-        else:
-            raw_response = urlopen(request, timeout=timeout)
+        try:
+            if config.has_option(__name__, 'ca_file'):
+                raw_response = urlopen(request, timeout=timeout, cafile=config.get(__name__, 'ca_file'))
+            elif config.has_option(__name__, 'ca_path'):
+                raw_response = urlopen(request, timeout=timeout, capath=config.get(__name__, 'ca_path'))
+            else:
+                raw_response = urlopen(request, timeout=timeout)
+        except Exception:
+            return self.service_down()
         # set next_cache timestamp
         next_cache['ts'] = time.time()
         # parse raw response as JSON
         try:
             stats = json.loads(raw_response.read())
         except Exception:
-            return False
+            return self.service_down()
         # keys for which we should calculate the delta
         delta_keys = (
             'corrupt-packets',
@@ -127,7 +130,7 @@ class Plugin(plugins.BasePlugin):
                         results[stat['name']] = float(stat['value'])
         data['ts'] = time.time()
         self.set_agent_cache(data)
-        return results
+        return self.service_up(results)
 
 if __name__ == '__main__':
     Plugin().execute()
