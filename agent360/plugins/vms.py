@@ -122,12 +122,12 @@ class Plugin(plugins.BasePlugin):
         data['net_rx_bytes'] = 0
         data['net_tx_bytes'] = 0
         for iface in self.get_ifaces(dom):
-            try:
-                stats = dom.interfaceStats(iface)
-                data['net_rx_bytes'] += stats[0]
-                data['net_tx_bytes'] += stats[4]
-            except libvirt.libvirtError:
-                print("Cannot get ifstats for '%s' on '%s'" % (iface, name), file=sys.stderr)
+            # libvirtError is deliberately not caught: it propagates to the per-guest
+            # handler in fetch_values(), so the guest is skipped entirely and
+            # incomplete network counters never enter the cache.
+            stats = dom.interfaceStats(iface)
+            data['net_rx_bytes'] += stats[0]
+            data['net_tx_bytes'] += stats[4]
 
         info = dom.info()
         cputime = float(info[4])
