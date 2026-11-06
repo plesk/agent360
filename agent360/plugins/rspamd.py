@@ -14,17 +14,31 @@ Returned metrics are grouped in nested dicts:
 
 Counters are values since the start of Rspamd, *_per_second values are
 calculated from them using cached values from the previous call. Ratios are
-calculated from the counters, so they are lifetime ratios.
+calculated over the interval since the previous call; on the first call (or
+when no messages were scanned in the interval) they fall back to lifetime
+ratios calculated from the counters.
 
-The controller must be reachable by rspamc without a password (default
-localhost:11334 with the agent's address in secure_ip) or rspamc must be
-configured in rspamc.conf.
+rspamc must be able to reach the controller. By default it uses
+localhost:11334, which Rspamd trusts without a password. For a password
+protected controller, put the (read-only) controller password in
+rspamc.conf, readable only by the user running the agent. Do not add
+addresses to the controller's secure_ip just for this plugin, and do not
+pass the password on the command line, it would be visible in the process
+list. Only a local controller is supported: the controller speaks plain HTTP,
+so the password would cross the network unencrypted for a remote one.
 
 Configuration section example:
 [rspamd]
 enabled = yes
-; optional, absolute path to rspamc, defaults to rspamc found in PATH
+; optional, absolute path to rspamc, otherwise rspamc is searched only in
+; the standard system directories (/usr/bin, /usr/local/bin, /bin, /usr/sbin,
+; /usr/local/sbin, /sbin), never in PATH
 ; binary = /usr/bin/rspamc
+; optional, local controller address passed to rspamc as -h, only
+; localhost, 127.0.0.1 or [::1] with an optional port are accepted
+; host = localhost:11334
+; optional, seconds to wait for each rspamc call (default 10)
+; timeout = 10
 
 Notes:
 - This plugin intentionally omits low-value/raw internals to keep payloads
@@ -37,6 +51,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import time
 
 import plugins
@@ -45,13 +60,14 @@ import plugins
 class Plugin(plugins.BasePlugin):
     __name__ = 'rspamd'
 
+    _SYSTEM_DIRS = ('/usr/bin', '/usr/local/bin', '/bin', '/usr/sbin', '/usr/local/sbin', '/sbin')
+    _LOCAL_HOST = re.compile(r'^(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?$')
+
     @staticmethod
     def _which(command):
-        # Compatible replacement for shutil.which for older Python versions.
-        # Only absolute PATH entries are considered.
-        for folder in os.environ.get('PATH', '').split(os.pathsep):
-            if not folder or not os.path.isabs(folder):
-                continue
+        # PATH is deliberately not used: the agent usually runs as root and a
+        # user-writable PATH entry would let someone run their own binary.
+        for folder in Plugin._SYSTEM_DIRS:
             candidate = os.path.join(folder, command)
             if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
                 return candidate
@@ -65,9 +81,18 @@ class Plugin(plugins.BasePlugin):
             configured = None
         if configured:
             if os.path.isabs(configured) and os.access(configured, os.X_OK):
-                return configured
-            return None
-        return Plugin._which('rspamc')
+                return configured, None
+            return None, 'configured binary must be an absolute path to an executable'
+        found = Plugin._which('rspamc')
+        return found, (None if found else 'rspamc binary not found')
+
+    @staticmethod
+    def _get_option(config, option, default=None):
+        try:
+            value = config.get('rspamd', option)
+        except Exception:
+            return default
+        return value if value else default
 
     @staticmethod
     def _to_text(raw_value):
@@ -104,25 +129,47 @@ class Plugin(plugins.BasePlugin):
             r'"(?:[^"\\]|\\.)*"|(?<![A-Za-z0-9_])(nan|inf|-inf)(?![A-Za-z0-9_])',
             replace, text, flags=re.IGNORECASE)
 
-    def _run_json(self, cmd):
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        stdout_raw, stderr_raw = proc.communicate()
-        stdout = self._to_text(stdout_raw).strip()
-        stderr = self._to_text(stderr_raw).strip()
+    def _run_json(self, cmd, timeout=10):
+        # Output of rspamc is never returned to the caller, errors are generic
+        # messages so that nothing from the controller leaves the server.
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        except Exception:
+            return None, 'cannot execute rspamc'
 
+        # Python 2 compatible timeout: kill the process from a timer thread.
+        timed_out = []
+
+        def kill():
+            timed_out.append(True)
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+        timer = threading.Timer(timeout, kill)
+        timer.daemon = True
+        timer.start()
+        try:
+            stdout_raw, _stderr_raw = proc.communicate()
+        finally:
+            timer.cancel()
+
+        if timed_out:
+            return None, 'rspamc timed out'
         if proc.returncode != 0:
-            return None, 'command failed (%s): %s' % (proc.returncode, (stderr or stdout)[:200])
+            return None, 'rspamc failed (exit code %s)' % proc.returncode
 
-        json_text = self._extract_json_text(stdout)
+        json_text = self._extract_json_text(self._to_text(stdout_raw).strip())
         if not json_text:
             return None, 'rspamc returned no JSON payload'
 
-        json_text = self._sanitize_json_text(json_text)
-
         try:
-            payload = json.loads(json_text)
+            payload = json.loads(self._sanitize_json_text(json_text))
         except Exception:
-            return None, 'invalid JSON from rspamc: %s' % stdout[:200]
+            return None, 'invalid JSON from rspamc'
+        if not isinstance(payload, dict):
+            return None, 'unexpected JSON from rspamc'
         return payload, None
 
     @staticmethod
@@ -181,24 +228,41 @@ class Plugin(plugins.BasePlugin):
         self.set_agent_cache(next_cache)
         return rates
 
-    def run(self, config):
-        binary = self._find_binary(config)
-        if not binary:
-            return {
-                'available': 0,
-                'error': 'rspamc binary not found',
-            }
+    @staticmethod
+    def _interval_pct(rates, key, total_key, lifetime_pct):
+        # Ratio over the interval since the previous call, lifetime ratio when
+        # there is nothing to calculate it from.
+        if rates[total_key] > 0:
+            return round(min(rates[key] * 100.0 / rates[total_key], 100.0), 4)
+        return lifetime_pct
 
-        stat, stat_error = self._run_json([binary, 'stat', '-j'])
-        uptime, uptime_error = self._run_json([binary, 'uptime', '-j'])
+    def run(self, config):
+        binary, binary_error = self._find_binary(config)
+        if not binary:
+            return {'health': {'available': 0}, 'error': binary_error}
+
+        base = [binary]
+        host = self._get_option(config, 'host')
+        if host:
+            if not self._LOCAL_HOST.match(host):
+                return {'health': {'available': 0}, 'error': 'host must be a local controller address'}
+            base += ['-h', host]
+        timeout = self._as_float(self._get_option(config, 'timeout'), 10.0)
+        if timeout <= 0:
+            timeout = 10.0
+
+        stat, stat_error = self._run_json(base + ['stat', '-j'], timeout)
+        uptime, uptime_error = self._run_json(base + ['uptime', '-j'], timeout)
 
         if not stat and not uptime:
             return {
-                'available': 0,
+                'health': {'available': 0},
                 'error': stat_error or uptime_error or 'rspamc unavailable',
             }
 
         actions = (stat or {}).get('actions', {})
+        if not isinstance(actions, dict):
+            actions = {}
 
         scanned = self._as_int((stat or {}).get('scanned', (uptime or {}).get('scanned', 0)))
         learned = self._as_int((stat or {}).get('learned', (uptime or {}).get('learned', 0)))
@@ -224,7 +288,9 @@ class Plugin(plugins.BasePlugin):
             'no_action_count': no_action_count,
         })
 
-        scan_times = (stat or {}).get('scan_times') or []
+        scan_times = (stat or {}).get('scan_times')
+        if not isinstance(scan_times, list):
+            scan_times = []
         if scan_times:
             scan_time_last = self._as_float(scan_times[-1])
         else:
@@ -251,7 +317,8 @@ class Plugin(plugins.BasePlugin):
                 'learned': learned,
                 'spam_count': spam_count,
                 'ham_count': ham_count,
-                'spam_ratio_pct': self._pct(spam_count, scanned),
+                'spam_ratio_pct': self._interval_pct(
+                    rates, 'spam_count', 'scanned', self._pct(spam_count, scanned)),
                 'scanned_per_second': rates['scanned'],
                 'learned_per_second': rates['learned'],
                 'spam_count_per_second': rates['spam_count'],
@@ -264,8 +331,10 @@ class Plugin(plugins.BasePlugin):
                 'add_header_count': add_header_count,
                 'rewrite_subject_count': rewrite_subject_count,
                 'no_action_count': no_action_count,
-                'reject_ratio_pct': self._pct(reject_count, scanned),
-                'greylist_ratio_pct': self._pct(greylist_count, scanned),
+                'reject_ratio_pct': self._interval_pct(
+                    rates, 'reject_count', 'scanned', self._pct(reject_count, scanned)),
+                'greylist_ratio_pct': self._interval_pct(
+                    rates, 'greylist_count', 'scanned', self._pct(greylist_count, scanned)),
                 'reject_count_per_second': rates['reject_count'],
                 'soft_reject_count_per_second': rates['soft_reject_count'],
                 'greylist_count_per_second': rates['greylist_count'],
@@ -274,7 +343,7 @@ class Plugin(plugins.BasePlugin):
                 'no_action_count_per_second': rates['no_action_count'],
             },
             'performance': {
-                'scan_time_avg_sec': self._avg((stat or {}).get('scan_times', [])),
+                'scan_time_avg_sec': self._avg(scan_times),
                 'scan_time_last_sec': scan_time_last,
             },
         }
