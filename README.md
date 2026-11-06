@@ -1,26 +1,22 @@
 # Agent360
 
-360 Monitoring ([360monitoring.com](https://360monitoring.com)) is a web service that monitors and displays statistics of
-your server performance.
+360 Monitoring ([360monitoring.com](https://360monitoring.com)) is a web service that monitors and displays your server performance statistics.
 
-Agent360 is OS agnostic software compatible with Python 3.7 and 3.8.
-It's been optimized to have low CPU consumption and comes with an
-extendable set of useful plugins.
+Agent360 is OS-agnostic software compatible with Python 3.7 and 3.8.
+It is optimized for low CPU usage and includes an extendable set of useful plugins.
 
 [![Build Status](https://github.com/plesk/agent360/workflows/Agent360-Test-And-Deploy/badge.svg?branch=master)](https://github.com/plesk/agent360/actions/workflows/test-and-deploy.yml)
 
 ## Documentation
 
-You can find the full documentation including the feature complete REST API at [docs.360monitoring.com](https://docs.360monitoring.com/docs) and [docs.360monitoring.com/docs/api](https://docs.360monitoring.com/docs/api).
+You can find the full documentation, including the feature-complete REST API, at [docs.360monitoring.com](https://docs.360monitoring.com/docs) and [docs.360monitoring.com/docs/api](https://docs.360monitoring.com/docs/api).
 
 ## Automatic Installation (All Linux Distributions)
 
-You can install the default configuration of Agent360 on all Linux distributions with just one click.
+You can install Agent360 with the default configuration on all Linux distributions with a single command.
 
 1. Connect to your server via SSH.
-
-2. Find your USERTOKEN. To do so, [go to the servers page](https://monitoring.platform360.io/servers/overview) and then click the "Add server" button.
-
+2. Find your USERTOKEN. To do so, [go to the servers page](https://monitoring.platform360.io/servers/overview) and click the Add server button.
 3. Run the following command:
 
     ```sh
@@ -29,16 +25,16 @@ You can install the default configuration of Agent360 on all Linux distributions
 
 ## Automatic Installation (Windows)
 
-Download the [setup](https://github.com/plesk/agent360/releases) and install it on your Windows server.
+Download the [installer](https://github.com/plesk/agent360/releases) and install it on your Windows server.
 
-The installer will ask for your USERTOKEN which you can get [from the servers page](https://monitoring.platform360.io/servers/overview).
+The installer will ask for your USERTOKEN, which you can get [from the servers page](https://monitoring.platform360.io/servers/overview).
 
 ## Manual Installation
 
 To customize installation options, install Agent360 manually.
 
 1. Connect to your server via SSH.
-2. Run the following command, which differs depending on your server platform:
+2. Run the following command for your server platform:
 
     - Debian GNU/Linux:
 
@@ -48,7 +44,7 @@ To customize installation options, install Agent360 manually.
         wget -O /etc/agent360.ini https://monitoring.platform360.io/agent360.ini
         ```
 
-    - Fedora/CentOS version 6 or earlier (python 2.7):
+    - Fedora/CentOS version 6 or earlier (Python 2.7):
 
         ```sh
         yum install python-devel python-setuptools gcc
@@ -56,7 +52,7 @@ To customize installation options, install Agent360 manually.
         wget -O /etc/agent360.ini https://monitoring.platform360.io/agent360.ini
         ```
 
-    - Fedora/CentOS version 7 and later (python 3):
+    - Fedora/CentOS version 7 and later (Python 3):
 
         ```sh
         yum install python36-devel python36 gcc
@@ -64,15 +60,14 @@ To customize installation options, install Agent360 manually.
         wget -O /etc/agent360.ini https://monitoring.platform360.io/agent360.ini
         ```
 
-3. Find your USERTOKEN. To do so, [go to the servers page](https://monitoring.platform360.io/servers/overview) and then click the "Add server" button. You need this to generate a serverid.
-
-4. Run the following command (USERTOKEN is the one you got during the previous step):
+3. Find your USERTOKEN. To do so, [go to the servers page](https://monitoring.platform360.io/servers/overview) and click the Add server button. You need this to generate a server ID.
+4. Run the following command (USERTOKEN is the value from the previous step):
 
     ```sh
     agent360 hello USERTOKEN /etc/agent360-token.ini
     ```
 
-5. Create a systemd service at `/etc/systemd/system/agent360.service` by adding the following:
+5. Create a systemd service at [agent360.service](http://_vscodecontentref_/0) with the following content:
 
     ```ini
     [Unit]
@@ -86,7 +81,7 @@ To customize installation options, install Agent360 manually.
     WantedBy=multi-user.target
     ```
 
-6. Run the following command:
+6. Run the following commands:
 
     ```sh
     chmod 644 /etc/systemd/system/agent360.service
@@ -95,8 +90,8 @@ To customize installation options, install Agent360 manually.
     systemctl start agent360
     ```
 
-## Building Windows setup
+## Building Windows Setup
 
-Prerequisite: [InnoSetup](https://jrsoftware.org/isdl.php) is used as the installer, build script assumes that it is installed in the default location.
+Prerequisite: [Inno Setup](https://jrsoftware.org/isdl.php) is used as the installer. The build script assumes it is installed in the default location.
 
-Run `php windows/build.php` to create setup file.
+Run `php windows/build.php` to create the setup file.

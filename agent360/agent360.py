@@ -311,7 +311,7 @@ class Agent:
 
     def __init__(self, dry_instance=False):
         '''
-        Initialize internal strictures
+        Initialize internal structures
         '''
         self._config_init()
 
@@ -383,8 +383,8 @@ class Agent:
 
     def _config_section_create(self, section):
         '''
-        Create an addition section in the configuration object
-        if it's not exists
+        Create an additional section in the configuration object
+        if it does not exist
         '''
         if not self.config.has_section(section):
             self.config.add_section(section)
@@ -800,7 +800,7 @@ class Agent:
 
     def _rip(self):
         '''
-        Join with dead workers
+        Join dead workers
         Workaround for https://bugs.python.org/issue37788
         '''
         logging.debug('cemetery:%i', self.cemetery.qsize())
@@ -852,7 +852,7 @@ class Agent:
                             thread.start()
                             logging.debug('new_execution_worker_thread:%s', thread)
                         except Exception as e:
-                            logging.warning('Can not start new thread: %s', e)
+                            logging.warning('Cannot start new thread: %s', e)
                     else:
                         logging.warning('threads_capped')
                         self.metrics.put({
