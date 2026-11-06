@@ -11,7 +11,10 @@ except ImportError:
 import time
 import plugins
 import json
-import collections
+try:
+    from collections.abc import Mapping
+except ImportError:  # Python 2.7
+    from collections import Mapping
 
 
 class Plugin(plugins.BasePlugin):
@@ -26,10 +29,6 @@ class Plugin(plugins.BasePlugin):
         status_page_url = http://127.0.0.1:9200/_stats
         '''
 
-        def ascii_encode_dict(data):
-            ascii_encode = lambda x: x.encode('ascii') if isinstance(x, unicode) else x
-            return dict(map(ascii_encode, pair) for pair in data.items())
-
         results = dict()
         next_cache = dict()
         request = Request(config.get('elasticsearch', 'status_page_url'))
@@ -43,13 +42,13 @@ class Plugin(plugins.BasePlugin):
             items = []
             for k, v in d.items():
                 new_key = parent_key + sep + k if parent_key else k
-                if isinstance(v, collections.MutableMapping):
+                if isinstance(v, Mapping):
                     items.extend(flatten(v, new_key, sep=sep).items())
                 else:
                     items.append((new_key, v))
             return dict(items)
         try:
-            j = flatten(json.loads(raw_response.read(), object_hook=ascii_encode_dict)['_all']['total'])
+            j = flatten(json.loads(raw_response.read())['_all']['total'])
         except Exception:
             return self.service_down()
 
