@@ -13,6 +13,12 @@ url_fridge = https://api.example.com/fridge
 method_fridge = GET
 headers_fridge = {"Accept":"application/json"}
 timeout_fridge = 5
+
+Only GET requests over http/https are supported. Redirects are followed only
+within the same host (and never from https to http), so credentials and custom
+headers are not forwarded elsewhere. Credentials in the config are sent with
+every request; use https:// URLs when auth_<name> or username_/password_<name>
+is set.
 """
 
 from __future__ import print_function, unicode_literals
@@ -20,12 +26,14 @@ from __future__ import print_function, unicode_literals
 import base64
 import json
 import logging
+import math
+import re
 
 try:
-    from urllib.request import Request, urlopen
+    from urllib.request import Request, HTTPRedirectHandler, build_opener
     from urllib.error import HTTPError, URLError
 except Exception:
-    from urllib2 import Request, urlopen, HTTPError, URLError
+    from urllib2 import Request, HTTPRedirectHandler, build_opener, HTTPError, URLError
 
 try:
     from urllib.parse import urlparse
@@ -37,11 +45,34 @@ import plugins
 
 DEFAULT_TIMEOUT = 10
 MAX_RESPONSE_BYTES = 1024 * 1024  # 1 MiB
+MAX_METRICS_PER_ENDPOINT = 200
 DISABLED_VALUES = ('no', 'false', '0', 'off')
 REQUEST_HEADERS = {
     'Accept': 'application/json',
     'User-Agent': 'agent360-json-fetch/2026.07',
 }
+
+
+def _reject_constant(name):
+    # json.loads() accepts NaN/Infinity by default; they are not valid JSON
+    # when the agent serializes its report.
+    raise ValueError('invalid constant %s' % name)
+
+
+class _SameHostRedirectHandler(HTTPRedirectHandler):
+    """Follow redirects only within the same host, never downgrading https.
+
+    urllib forwards all request headers (including Authorization and custom
+    API-key headers) to the redirect target, so cross-host redirects would
+    leak credentials.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old = urlparse(req.get_full_url())
+        new = urlparse(newurl)
+        if new.scheme not in ('http', 'https') or                 (old.scheme == 'https' and new.scheme != 'https') or                 (old.hostname or '').lower() != (new.hostname or '').lower():
+            return None
+        return HTTPRedirectHandler.redirect_request(self, req, fp, code, msg, headers, newurl)
 
 
 class Plugin(plugins.BasePlugin):
@@ -113,24 +144,29 @@ class Plugin(plugins.BasePlugin):
                                 endpoint_name)
                 continue
 
+            method = 'GET'
+            method_key = 'method_' + endpoint_name
+            if config.has_option(section, method_key):
+                method = config.get(section, method_key).strip().upper() or 'GET'
+            if method != 'GET':
+                logging.warning('json_fetch: endpoint %s: unsupported method %s (only GET is allowed)',
+                                endpoint_name, method)
+                continue
+
             endpoint = {
                 'name': endpoint_name,
                 'url': url,
-                'method': 'GET',
                 'headers': {},
                 'timeout': DEFAULT_TIMEOUT,
                 'auth': None,
             }
 
-            method_key = 'method_' + endpoint_name
             headers_key = 'headers_' + endpoint_name
             timeout_key = 'timeout_' + endpoint_name
             auth_key = 'auth_' + endpoint_name
             username_key = 'username_' + endpoint_name
             password_key = 'password_' + endpoint_name
 
-            if config.has_option(section, method_key):
-                endpoint['method'] = config.get(section, method_key).strip().upper() or 'GET'
             if config.has_option(section, headers_key):
                 endpoint['headers'] = self._parse_headers(config.get(section, headers_key))
             if config.has_option(section, timeout_key):
@@ -141,6 +177,10 @@ class Plugin(plugins.BasePlugin):
                 username = config.get(section, username_key) if config.has_option(section, username_key) else ''
                 password = config.get(section, password_key) if config.has_option(section, password_key) else ''
                 endpoint['auth'] = '%s:%s' % (username, password)
+
+            if endpoint['auth'] and urlparse(url).scheme != 'https':
+                logging.warning('json_fetch: endpoint %s: credentials are sent over unencrypted http',
+                                endpoint_name)
 
             endpoints.append(endpoint)
 
@@ -164,13 +204,6 @@ class Plugin(plugins.BasePlugin):
 
     def _build_request(self, endpoint):
         request = Request(endpoint['url'])
-        method = endpoint.get('method', 'GET')
-        if method not in ('GET', 'POST'):
-            try:
-                request.get_method = lambda: method
-            except Exception:
-                pass
-
         merged_headers = dict(REQUEST_HEADERS)
         merged_headers.update(endpoint.get('headers') or {})
         for key, value in merged_headers.items():
@@ -191,14 +224,15 @@ class Plugin(plugins.BasePlugin):
 
     def _fetch_json(self, endpoint):
         try:
-            response = urlopen(self._build_request(endpoint), timeout=endpoint['timeout'])
+            opener = build_opener(_SameHostRedirectHandler)
+            response = opener.open(self._build_request(endpoint), timeout=endpoint['timeout'])
             raw = response.read(MAX_RESPONSE_BYTES + 1)
             if len(raw) > MAX_RESPONSE_BYTES:
                 logging.warning('json_fetch: endpoint %s: response larger than %d bytes',
                                 endpoint['name'], MAX_RESPONSE_BYTES)
                 return None
             payload = self._decode_payload(raw)
-            return json.loads(payload)
+            return json.loads(payload, parse_constant=_reject_constant)
         except HTTPError as error:
             message = 'HTTPError: %s %s' % (
                 getattr(error, 'code', ''),
@@ -217,11 +251,14 @@ class Plugin(plugins.BasePlugin):
         if isinstance(value, bool):
             return {prefix: int(value)}
         if isinstance(value, (int, float)):
+            if isinstance(value, float) and not math.isfinite(value):
+                return {}
             return {prefix: value}
         if isinstance(value, dict) and depth > 0:
             out = {}
             for key, child in value.items():
-                out.update(self._flatten_payload('%s_%s' % (prefix, key), child, depth - 1))
+                out.update(self._flatten_payload('%s_%s' % (prefix, re.sub(r'[^A-Za-z0-9_]', '_', '%s' % key)),
+                                                  child, depth - 1))
             return out
         return {}  # strings, null, lists, too-deep values are skipped
 
@@ -241,7 +278,12 @@ class Plugin(plugins.BasePlugin):
                 results['%s_up' % endpoint['name']] = 0
                 continue
             results['%s_up' % endpoint['name']] = 1
-            results.update(self._flatten_payload(endpoint['name'], payload))
+            metrics = self._flatten_payload(endpoint['name'], payload)
+            if len(metrics) > MAX_METRICS_PER_ENDPOINT:
+                logging.warning('json_fetch: endpoint %s: %d metrics, keeping first %d',
+                                endpoint['name'], len(metrics), MAX_METRICS_PER_ENDPOINT)
+                metrics = dict(sorted(metrics.items())[:MAX_METRICS_PER_ENDPOINT])
+            results.update(metrics)
 
         return results
 
