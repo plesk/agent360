@@ -14,6 +14,14 @@ Optional config keys in the [temp] section (Windows only):
 - username: optional basic-auth username for the webservice
 - password: optional basic-auth password for the webservice
 
+Example:
+    [temp]
+    monitor = LibreHardwareMonitor
+    url = http://127.0.0.1:8085/data.json
+
+Note: older LibreHardwareMonitor builds do not expose "Type" in data.json;
+temperatures cannot be detected there and the plugin reports no data.
+
 Testing:
 - agent360 test temp
 """
@@ -22,12 +30,18 @@ import plugins
 import psutil
 import sys
 import json
+import logging
 import re
 
 try:
     from urllib.request import Request, urlopen
-except Exception:
+except ImportError:
     from urllib2 import Request, urlopen
+
+try:
+    string_types = (basestring,)
+except NameError:
+    string_types = (str,)
 
 class Plugin(plugins.BasePlugin):
     __name__ = 'temp'
@@ -62,7 +76,7 @@ class Plugin(plugins.BasePlugin):
                 auth_header = base64.b64encode(token).decode('ascii')
                 request.add_header('Authorization', 'Basic ' + auth_header)
             except Exception:
-                pass
+                logging.exception('temp: could not build basic-auth header')
 
         response = urlopen(request, timeout=3)
         try:
@@ -74,31 +88,39 @@ class Plugin(plugins.BasePlugin):
                 pass
         sensor_tree = json.loads(payload)
 
-        def collect_temps(node):
+        def parse_temperature(*candidates):
+            for candidate in candidates:
+                if isinstance(candidate, (int, float)):
+                    return float(candidate)
+                if isinstance(candidate, string_types):
+                    match = re.search(r'-?\d+(?:[\.,]\d+)?', candidate)
+                    if match:
+                        return float(match.group(0).replace(',', '.'))
+            return None
+
+        def collect_temps(node, path):
             if not isinstance(node, dict):
                 return
 
-            value = node.get('Value')
-            raw_value = node.get('RawValue')
-            name = node.get('Text')
-            sensor_type = node.get('Type')
-            sensor_id = node.get('SensorId')
+            name = node.get('Text') or ''
 
-            if sensor_type == 'Temperature':
-                source_value = raw_value if isinstance(raw_value, str) else value
-                match = re.search(r'-?\d+(?:[\.,]\d+)?', source_value or '')
-                parsed_value = match.group(0).replace(',', '.') if match else source_value
-                try:
-                    parsed_value = float(parsed_value)
-                except Exception:
-                    pass
-                data[sensor_id or name or 'unknown'] = parsed_value
+            if node.get('Type') == 'Temperature':
+                temperature = parse_temperature(node.get('RawValue'), node.get('Value'))
+                if temperature is not None:
+                    sensor_id = node.get('SensorId')
+                    if sensor_id:
+                        # same normalisation as the OpenHardwareMonitor backend
+                        key = sensor_id.replace('/', '-').strip('-')
+                    else:
+                        # no SensorId (older versions): use the tree path so
+                        # sensors with equal names on different hardware don't collide
+                        key = '-'.join([p for p in path + [name] if p]) or 'unknown'
+                    data[key] = temperature
 
-            children = node.get('Children') or []
-            for child in children:
-                collect_temps(child)
+            for child in node.get('Children') or []:
+                collect_temps(child, path + [name])
 
-        collect_temps(sensor_tree)
+        collect_temps(sensor_tree, [])
         return data
 
     def run(self, config=None, *unused):
@@ -113,8 +135,9 @@ class Plugin(plugins.BasePlugin):
                     if not data:
                         return 'LibreHardwareMonitor returned no temperature data.'
                     return data
-                except Exception:
-                    return 'Could not fetch temperature data from LibreHardwareMonitor webservice.'
+                except Exception as e:
+                    logging.debug('temp: LibreHardwareMonitor error', exc_info=True)
+                    return 'Could not fetch temperature data from LibreHardwareMonitor webservice: %s' % e
 
             try:
                 import wmi
@@ -128,8 +151,9 @@ class Plugin(plugins.BasePlugin):
                     if sensor.SensorType == u'Temperature':
                         data[sensor.Parent.replace('/', '-').strip('-')] = sensor.Value
                 return data
-            except Exception:
-                return 'Could not fetch temperature data from OpenHardwareMonitor.'
+            except Exception as e:
+                logging.debug('temp: OpenHardwareMonitor error', exc_info=True)
+                return 'Could not fetch temperature data from OpenHardwareMonitor: %s' % e
         if not hasattr(psutil, "sensors_temperatures"):
             return "platform not supported"
 
@@ -158,7 +182,12 @@ class Plugin(plugins.BasePlugin):
                 except Exception:
                     continue
 
-                key = "%s-%s" % (device, label) if label else device
+                # Keep the historical key (label, or device name when there is
+                # no label) so existing metric series are not renamed; only
+                # disambiguate when it would overwrite another reading.
+                key = label or device
+                if key in data:
+                    key = "%s-%s" % (device, label) if label else "%s-%d" % (device, index)
                 if key in data:
                     key = "%s-%d" % (key, index)
 
