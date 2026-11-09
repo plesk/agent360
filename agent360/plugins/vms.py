@@ -95,68 +95,74 @@ class Plugin(plugins.BasePlugin):
         ids = conn.listDomainsID()
         results = {}
         for id in ids:
-            data = {}
-            data['net_rx_bytes'] = 0
-            data['net_tx_bytes'] = 0
             try:
-                dom = conn.lookupByID(id)
-                name = dom.name()
+                name, data = self.fetch_domain_values(conn, id)
             except libvirt.libvirtError as err:
-                print("Id: %s: %s" % (id, err), file=sys.stderr)
+                # A guest that is busy (e.g. holds the state change lock during
+                # a live migration) must not abort collection for the other guests.
+                # Skip it for this cycle: partial data would produce bogus deltas.
+                print("Id: %s: skipped, %s" % (id, err), file=sys.stderr)
                 continue
-            if name == "Domain-0":
+            if name is None:
                 continue
-            ifaces = self.get_ifaces(dom)
-            for iface in ifaces:
-                try:
-                    stats = dom.interfaceStats(iface)
-                    data['net_rx_bytes'] += stats[0]
-                    data['net_tx_bytes'] += stats[4]
-                except:
-                    print >>sys.stderr, "Cannot get ifstats for '%s' on '%s'" % (iface, name)
-
-            cputime = float(dom.info()[4])
-            cputime_percentage = 1.0e-7 * cputime
-            data['cpu'] = cputime_percentage
-            try:
-                data['cpu_percentage'] = cputime_percentage / psutil.cpu_count()
-            except Exception as e:
-                pass
-
-            maxmem, mem = dom.info()[1:3]
-            mem *= 1024
-            maxmem *= 1024
-            data['mem_bytes'] = mem
-            memtune = self.get_memtune(dom)
-            data['min_guarantee_bytes'] = memtune['min_guarantee'] * 1024
-            data['hard_limit_bytes'] = memtune['hard_limit'] * 1024
-            data['soft_limit_bytes'] = memtune['soft_limit'] * 1024
-
-            data['disk_rd_bytes'] = 0
-            data['disk_wr_bytes'] = 0
-            data['disk_wr_req'] = 0
-            data['disk_rd_req'] = 0
-            try:
-                dom = conn.lookupByID(id)
-                name = dom.name()
-            except libvirt.libvirtError as err:
-                print("Id: %s: %s" % (id, err), file=sys.stderr)
-                continue
-            if name == "Domain-0":
-                continue
-            disks = self.get_disks(dom)
-            for disk in disks:
-                try:
-                    rd_req, rd_bytes, wr_req, wr_bytes, errs = dom.blockStats(disk)
-                    data['disk_rd_bytes'] += rd_bytes
-                    data['disk_wr_bytes'] += wr_bytes
-                    data['disk_rd_req'] += rd_req
-                    data['disk_wr_req'] += wr_req
-                except TypeError:
-                    print >>sys.stderr, "Cannot get blockstats for '%s' on '%s'" % (disk, name)
-
             results[self.canon(name)] = data
         return results
+
+    def fetch_domain_values(self, conn, id):
+        '''
+        Returns (name, data) for a single domain, or (None, None) if the domain
+        should be ignored. Raises libvirt.libvirtError if the domain cannot be queried.
+        '''
+        dom = conn.lookupByID(id)
+        name = dom.name()
+        if name == "Domain-0":
+            return None, None
+
+        data = {}
+        data['net_rx_bytes'] = 0
+        data['net_tx_bytes'] = 0
+        for iface in self.get_ifaces(dom):
+            # libvirtError is deliberately not caught: it propagates to the per-guest
+            # handler in fetch_values(), so the guest is skipped entirely and
+            # incomplete network counters never enter the cache.
+            stats = dom.interfaceStats(iface)
+            data['net_rx_bytes'] += stats[0]
+            data['net_tx_bytes'] += stats[4]
+
+        info = dom.info()
+        cputime = float(info[4])
+        cputime_percentage = 1.0e-7 * cputime
+        data['cpu'] = cputime_percentage
+        try:
+            data['cpu_percentage'] = cputime_percentage / psutil.cpu_count()
+        except Exception as e:
+            pass
+
+        data['mem_bytes'] = info[2] * 1024
+        memtune = self.get_memtune(dom)
+        data['min_guarantee_bytes'] = memtune['min_guarantee'] * 1024
+        data['hard_limit_bytes'] = memtune['hard_limit'] * 1024
+        data['soft_limit_bytes'] = memtune['soft_limit'] * 1024
+
+        data['disk_rd_bytes'] = 0
+        data['disk_wr_bytes'] = 0
+        data['disk_wr_req'] = 0
+        data['disk_rd_req'] = 0
+        for disk in self.get_disks(dom):
+            try:
+                rd_req, rd_bytes, wr_req, wr_bytes, errs = dom.blockStats(disk)
+            except TypeError:
+                print("Cannot get blockstats for '%s' on '%s'" % (disk, name), file=sys.stderr)
+                continue
+            # libvirtError is deliberately not caught here: if the domain is locked,
+            # every further call would block for the libvirt job wait (~120s) too,
+            # so give up on the whole domain instead of just this disk.
+            data['disk_rd_bytes'] += rd_bytes
+            data['disk_wr_bytes'] += wr_bytes
+            data['disk_rd_req'] += rd_req
+            data['disk_wr_req'] += wr_req
+
+        return name, data
 
     def get_disks(self, dom):
         xml = dom.XMLDesc(0)
