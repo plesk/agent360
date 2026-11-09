@@ -17,6 +17,8 @@ calculated from them using cached values from the previous call. Ratios are
 calculated over the interval since the previous call; on the first call (or
 when no messages were scanned in the interval) they fall back to lifetime
 ratios calculated from the counters.
+If stat fails, only health and version are reported; counter samples and their
+timestamp are preserved until the next successful stat call.
 
 rspamc must be able to reach the controller. By default it uses
 localhost:11334, which Rspamd trusts without a password. For a password
@@ -260,7 +262,29 @@ class Plugin(plugins.BasePlugin):
                 'error': stat_error or uptime_error or 'rspamc unavailable',
             }
 
-        actions = (stat or {}).get('actions', {})
+        # A successful stat call means the controller accepted the request.
+        auth = (uptime or {}).get('auth', (stat or {}).get('auth'))
+        auth_ok = (auth == 'ok') if auth is not None else not stat_error
+
+        result = {
+            'meta': {
+                'version': (stat or {}).get('version', (uptime or {}).get('version', 'unknown')),
+            },
+            'health': {
+                'available': 1,
+                'auth_ok': 1 if auth_ok else 0,
+                'read_only': 1 if bool((stat or {}).get('read_only', (uptime or {}).get('read_only', False))) else 0,
+                'uptime_seconds': self._as_int((stat or {}).get('uptime', (uptime or {}).get('uptime', 0))),
+                'stat_ok': 0 if stat_error or not stat else 1,
+                'uptime_ok': 0 if uptime_error else 1,
+            },
+        }
+        if stat_error or not stat:
+            # Uptime lacks some counters and combines others. Do not cache a
+            # partial sample or advance the timestamp used for recovery rates.
+            return result
+
+        actions = stat.get('actions', {})
         if not isinstance(actions, dict):
             actions = {}
 
@@ -296,22 +320,7 @@ class Plugin(plugins.BasePlugin):
         else:
             scan_time_last = self._as_float((stat or {}).get('scan_time', (uptime or {}).get('scan_time', 0.0)))
 
-        # A successful stat call means the controller accepted the request.
-        auth = (uptime or {}).get('auth', (stat or {}).get('auth'))
-        auth_ok = (auth == 'ok') if auth is not None else not stat_error
-
-        result = {
-            'meta': {
-                'version': (stat or {}).get('version', (uptime or {}).get('version', 'unknown')),
-            },
-            'health': {
-                'available': 1,
-                'auth_ok': 1 if auth_ok else 0,
-                'read_only': 1 if bool((stat or {}).get('read_only', (uptime or {}).get('read_only', False))) else 0,
-                'uptime_seconds': self._as_int((stat or {}).get('uptime', (uptime or {}).get('uptime', 0))),
-                'stat_ok': 0 if stat_error else 1,
-                'uptime_ok': 0 if uptime_error else 1,
-            },
+        result.update({
             'messages': {
                 'scanned': scanned,
                 'learned': learned,
@@ -346,7 +355,7 @@ class Plugin(plugins.BasePlugin):
                 'scan_time_avg_sec': self._avg(scan_times),
                 'scan_time_last_sec': scan_time_last,
             },
-        }
+        })
 
         return result
 
