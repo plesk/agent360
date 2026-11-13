@@ -8,14 +8,20 @@ import re
 class Plugin(plugins.BasePlugin):
     __name__ = 'cpanel'
 
-    def to_bytes(self, size):
-        size = size.upper()
-        units = {"B": 1, "K": 2 ** 10, "M": 2 ** 20, "G": 2 ** 30, "T": 2 ** 40}
+    UNITS = {"B": 1, "K": 2 ** 10, "M": 2 ** 20, "G": 2 ** 30, "T": 2 ** 40}
+    SIZE_RE = re.compile(r'^\s*(\d+(?:\.\d+)?)\s*([BKMGT]?)B?\s*$', re.IGNORECASE)
 
-        if not re.match(r' ', size):
-            size = re.sub(r'([KMGT])', r' \1', size)
-        number, unit = [string.strip() for string in size.split()]
-        return int(float(number) * units[unit])
+    def to_bytes(self, size):
+        '''
+        Convert a size string reported by cPanel ("12M", "1.5G", "512B", "0",
+        "10 MB") to bytes. Returns None when cPanel reports no size, for
+        example "none" when disk quotas are not enabled or "unlimited".
+        '''
+        match = self.SIZE_RE.match(str(size))
+        if not match:
+            return None
+        number, unit = match.groups()
+        return int(float(number) * self.UNITS[unit.upper() or "B"])
 
     def run(self, config):
         '''
@@ -31,7 +37,6 @@ class Plugin(plugins.BasePlugin):
         accounts = json.loads(data)
         for account in accounts['data']['acct']:
             results[account['user']] = {
-                'diskused_bytes': self.to_bytes(account['diskused']),
                 'inodesused': account['inodesused'],
                 'is_locked': account['is_locked'],
                 'has_backup': account['has_backup'],
@@ -39,6 +44,11 @@ class Plugin(plugins.BasePlugin):
                 'outgoing_mail_suspended': account['outgoing_mail_suspended'],
                 'suspended': account['suspended'],
             }
+            # Without disk quotas cPanel reports "none": omit the metric then,
+            # instead of failing the whole plugin or reporting a false 0.
+            diskused = self.to_bytes(account['diskused'])
+            if diskused is not None:
+                results[account['user']]['diskused_bytes'] = diskused
         return results
 
 
