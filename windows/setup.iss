@@ -1,5 +1,5 @@
 #define MyAppName "Agent360"
-#define MyAppVersion "1.3.5"
+#define MyAppVersion "1.3.6"
 #define MyAppPublisher "360 Monitoring"
 #define MyAppURL "https://360monitoring.io/"
 
